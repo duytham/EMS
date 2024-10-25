@@ -1,15 +1,77 @@
+<?php
+session_start();
+include("config.php"); // Kết nối database qua PDO
+
+if ($_SERVER["REQUEST_METHOD"] == "POST") {
+    $email = $_POST['email'];
+    $password = $_POST['password'];
+
+    // Truy vấn PDO để kiểm tra người dùng có tồn tại không
+    $stmt = $conn->prepare("SELECT Id, FullName, Password, RoleID FROM user WHERE Email = :email");
+    $stmt->bindParam(':email', $email);
+    $stmt->execute();
+
+    if ($stmt->rowCount() == 1) {
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        // Kiểm tra mật khẩu
+        if (password_verify($password, $row['Password'])) {
+            $_SESSION['user_id'] = $row['Id'];
+            $_SESSION['user_name'] = $row['FullName'];
+            $_SESSION['role_id'] = $row['RoleID'];
+
+            // Phân quyền dựa trên RoleID
+            switch ($row['RoleID']) {
+                case 1: // Admin
+                    header("Location: admin/dashboard.php");
+                    break;
+                case 2: // Employee
+                    header("Location: employee/dashboard.php");
+                    break;
+                case 3: // Department Manager
+                    header("Location: department/dashboard.php");
+                    break;
+                default:
+                    echo "Unauthorized Access!";
+                    exit;
+            }
+            exit();
+        } else {
+            echo "<script>alert('Password is incorrect!');window.location.href='login.php';</script>";
+        }
+    } else {
+        echo "<script>alert('Email is unavalible!');window.location.href='login.php';</script>";
+    }
+}
+
+if (isset($_SESSION['user_id'])) {
+    // Chuyển hướng dựa trên role của user
+    if ($_SESSION['role_id'] == 1) {
+        header("Location: /EMS/admin/dashboard.php");
+    } elseif ($_SESSION['role_id'] == 2) {
+        header("Location: /EMS/employee/dashboard.php");
+    } elseif ($_SESSION['role_id'] == 3) {
+        header("Location: /EMS/department/dashboard.php");
+    }
+    exit(); // Dừng việc xử lý tiếp theo
+}
+// else {
+//     header("Location: /EMS/login.php");
+// }
+?>
+
+
 <!DOCTYPE html>
 <html lang="en">
 
 <head>
-
     <meta charset="utf-8">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
     <meta name="description" content="">
     <meta name="author" content="">
 
-    <title>SB Admin 2 - Login</title>
+    <title>EDMS - Login</title>
 
     <!-- Custom fonts for this template-->
     <link href="vendor/fontawesome-free/css/all.min.css" rel="stylesheet" type="text/css">
@@ -19,11 +81,9 @@
 
     <!-- Custom styles for this template-->
     <link href="css/sb-admin-2.min.css" rel="stylesheet">
-
 </head>
 
 <body class="bg-gradient-primary">
-
     <div class="container">
 
         <!-- Outer Row -->
@@ -41,51 +101,37 @@
                                     <div class="text-center">
                                         <h1 class="h4 text-gray-900 mb-4">Welcome Back!</h1>
                                     </div>
-                                    <form class="user">
+                                    <form class="user" method="post" action="">
                                         <div class="form-group">
-                                            <input type="email" class="form-control form-control-user"
-                                                id="exampleInputEmail" aria-describedby="emailHelp"
-                                                placeholder="Enter Email Address...">
+                                            <input type="email" name="email" class="form-control form-control-user" placeholder="Enter Email Address...">
                                         </div>
                                         <div class="form-group">
-                                            <input type="password" class="form-control form-control-user"
-                                                id="exampleInputPassword" placeholder="Password">
+                                            <input type="password" name="password" class="form-control form-control-user" placeholder="Password">
                                         </div>
                                         <div class="form-group">
-                                            <div class="custom-control custom-checkbox small">
-                                                <input type="checkbox" class="custom-control-input" id="customCheck">
-                                                <label class="custom-control-label" for="customCheck">Remember
-                                                    Me</label>
+                                            <input type="submit" value="Login" class="btn btn-primary btn-user btn-block">
+                                        </div>
+                                        <!-- Hiển thị lỗi nếu có -->
+                                        <?php if (isset($error)): ?>
+                                            <div class="alert alert-danger">
+                                                <?php echo $error; ?>
                                             </div>
-                                        </div>
-                                        <a href="index.html" class="btn btn-primary btn-user btn-block">
-                                            Login
-                                        </a>
-                                        <hr>
-                                        <a href="index.html" class="btn btn-google btn-user btn-block">
-                                            <i class="fab fa-google fa-fw"></i> Login with Google
-                                        </a>
-                                        <a href="index.html" class="btn btn-facebook btn-user btn-block">
-                                            <i class="fab fa-facebook-f fa-fw"></i> Login with Facebook
-                                        </a>
+                                        <?php endif; ?>
                                     </form>
                                     <hr>
                                     <div class="text-center">
-                                        <a class="small" href="forgot-password.html">Forgot Password?</a>
+                                        <a class="small" href="forgot-password.php">Forgot Password?</a>
                                     </div>
                                     <div class="text-center">
-                                        <a class="small" href="register.html">Create an Account!</a>
+                                        <a class="small" href="register.php">Create an Account!</a>
                                     </div>
                                 </div>
                             </div>
                         </div>
                     </div>
                 </div>
-
             </div>
-
         </div>
-
     </div>
 
     <!-- Bootstrap core JavaScript-->

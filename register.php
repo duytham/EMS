@@ -1,15 +1,71 @@
+<?php
+
+// Bật báo cáo lỗi
+error_reporting(E_ALL);
+ini_set('display_errors', 1);
+
+// Include file cấu hình database
+include 'config.php';
+
+// Biến để lưu thông báo lỗi
+$error_message = '';
+
+if ($_SERVER["REQUEST_METHOD"] == "POST") {
+    // Lấy dữ liệu từ form
+    $full_name = $_POST['first_name'] . ' ' . $_POST['last_name']; // Ghép tên và họ
+    $email = $_POST['email'];
+    $password = $_POST['password'];
+    $repeat_password = $_POST['repeat_password'];
+    $role_id = 2; // Giá trị mặc định cho role_id
+
+    // Kiểm tra xem mật khẩu có khớp không
+    if ($password !== $repeat_password) {
+        $error_message = "Mật khẩu không khớp.";
+        exit;
+    } else {
+        // Mã hóa mật khẩu để bảo mật
+        $hashed_password = password_hash($password, PASSWORD_DEFAULT);
+
+        // Chuẩn bị truy vấn để thêm người dùng vào bảng User
+        $sql = "INSERT INTO `User` (FullName, Email, Password, RoleID) 
+            VALUES (:full_name, :email, :password, :role_id)";
+
+        try {
+            // Thực thi truy vấn
+            $stmt = $conn->prepare($sql);
+            $stmt->bindParam(':full_name', $full_name);
+            $stmt->bindParam(':email', $email);
+            $stmt->bindParam(':password', $hashed_password);
+            $stmt->bindParam(':role_id', $role_id);
+            $stmt->execute();
+
+            // Hiển thị thông báo đăng ký thành công
+            echo "<script>alert('Đăng ký thành công!'); window.location.href='login.php';</script>";
+            exit;
+        } catch (PDOException $e) {
+            $error_message = "Lỗi: " . $e->getMessage();
+        }
+    }
+}
+?>
+
+
 <!DOCTYPE html>
 <html lang="en">
 
 <head>
-
     <meta charset="utf-8">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
     <meta name="description" content="">
     <meta name="author" content="">
 
-    <title>SB Admin 2 - Register</title>
+    <title>EDMS - Register</title>
+    <style>
+        .error {
+            color: red;
+        }
+    </style>
 
     <!-- Custom fonts for this template-->
     <link href="vendor/fontawesome-free/css/all.min.css" rel="stylesheet" type="text/css">
@@ -36,55 +92,45 @@
                             <div class="text-center">
                                 <h1 class="h4 text-gray-900 mb-4">Create an Account!</h1>
                             </div>
-                            <form class="user">
+                            <form class="user" method="POST" action="register.php">
                                 <div class="form-group row">
                                     <div class="col-sm-6 mb-3 mb-sm-0">
-                                        <input type="text" class="form-control form-control-user" id="exampleFirstName"
-                                            placeholder="First Name">
+                                        <input type="text" class="form-control form-control-user" name="first_name" id="exampleFirstName" placeholder="First Name" required>
                                     </div>
                                     <div class="col-sm-6">
-                                        <input type="text" class="form-control form-control-user" id="exampleLastName"
-                                            placeholder="Last Name">
+                                        <input type="text" class="form-control form-control-user" name="last_name" id="exampleLastName" placeholder="Last Name" required>
                                     </div>
                                 </div>
                                 <div class="form-group">
-                                    <input type="email" class="form-control form-control-user" id="exampleInputEmail"
-                                        placeholder="Email Address">
+                                    <input type="email" class="form-control form-control-user" name="email" id="exampleInputEmail" placeholder="Email Address" required>
                                 </div>
                                 <div class="form-group row">
                                     <div class="col-sm-6 mb-3 mb-sm-0">
-                                        <input type="password" class="form-control form-control-user"
-                                            id="exampleInputPassword" placeholder="Password">
+                                        <input type="password" class="form-control form-control-user" name="password" id="exampleInputPassword" placeholder="Password" required>
                                     </div>
                                     <div class="col-sm-6">
-                                        <input type="password" class="form-control form-control-user"
-                                            id="exampleRepeatPassword" placeholder="Repeat Password">
+                                        <input type="password" class="form-control form-control-user" name="repeat_password" id="exampleRepeatPassword" placeholder="Repeat Password" required>
                                     </div>
                                 </div>
-                                <a href="login.html" class="btn btn-primary btn-user btn-block">
+                                <button type="submit" class="btn btn-primary btn-user btn-block">
                                     Register Account
-                                </a>
-                                <hr>
-                                <a href="index.html" class="btn btn-google btn-user btn-block">
-                                    <i class="fab fa-google fa-fw"></i> Register with Google
-                                </a>
-                                <a href="index.html" class="btn btn-facebook btn-user btn-block">
-                                    <i class="fab fa-facebook-f fa-fw"></i> Register with Facebook
-                                </a>
+                                </button>
+                                <?php if (!empty($error_message)){
+                                    echo '<script>alert("Lỗi mẹ rồi")</script>';
+                                }?>
                             </form>
                             <hr>
                             <div class="text-center">
-                                <a class="small" href="forgot-password.html">Forgot Password?</a>
+                                <a class="small" href="forgot-password.php">Forgot Password?</a>
                             </div>
                             <div class="text-center">
-                                <a class="small" href="login.html">Already have an account? Login!</a>
+                                <a class="small" href="login.php">Already have an account? Login!</a>
                             </div>
                         </div>
                     </div>
                 </div>
             </div>
         </div>
-
     </div>
 
     <!-- Bootstrap core JavaScript-->
@@ -96,7 +142,6 @@
 
     <!-- Custom scripts for all pages-->
     <script src="js/sb-admin-2.min.js"></script>
-
 </body>
 
 </html>
