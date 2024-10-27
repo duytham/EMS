@@ -17,7 +17,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     $emailCheck->execute();
 
     if ($emailCheck->rowCount() > 0) {
-        $errorMessage = "Email đã tồn tại. Vui lòng sử dụng email khác.";
+        $errorMessage = "Email already exists. Please use another email.";
     } else {
 
         // Mã hóa mật khẩu
@@ -80,7 +80,8 @@ $departments = $conn->query("SELECT * FROM `Department`")->fetchAll(PDO::FETCH_A
             width: 100%;
             max-width: 500px;
             margin: 10px 0;
-            border-radius: 15px; /* Bo tròn các ô nhập liệu */
+            border-radius: 15px;
+            /* Bo tròn các ô nhập liệu */
         }
 
         label {
@@ -147,8 +148,8 @@ $departments = $conn->query("SELECT * FROM `Department`")->fetchAll(PDO::FETCH_A
                         <button type="submit" class="btn btn-primary">Add employee</button>
                     </form>
                 </div>
-                <?php include('../templates/footer.php') ?>
             </div>
+            <?php include('../templates/footer.php') ?>
         </div>
     </div>
 
@@ -160,8 +161,6 @@ $departments = $conn->query("SELECT * FROM `Department`")->fetchAll(PDO::FETCH_A
     <script src="../vendor/bootstrap/js/bootstrap.bundle.min.js"></script>
     <script src="../vendor/jquery-easing/jquery.easing.min.js"></script>
     <script src="../js/sb-admin-2.min.js"></script>
-
 </body>
 
 </html>
-

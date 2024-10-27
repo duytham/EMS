@@ -3,7 +3,7 @@ require_once '../config.php';  // Sử dụng file config.php với PDO
 
 // Câu SQL để lấy danh sách nhân viên (trừ admin), bao gồm tên phòng ban
 $sql = "
-    SELECT u.Id, u.FullName, u.Email, u.PhoneNumber, d.DepartmentName 
+    SELECT u.Id, u.FullName, u.Email, u.PhoneNumber, d.DepartmentName, u.Status 
     FROM `User` u 
     LEFT JOIN `Department` d ON u.DepartmentID = d.id 
     WHERE u.RoleID != 1 and u.RoleID != 3
@@ -98,7 +98,7 @@ include "../config.php";
                                 <span class="icon text-white-50">
                                 </span>
                                 <button type="button" class="btn btn-primary" data-toggle="modal" data-target="#addEmployeeModal">
-                                    Thêm Nhân Viên
+                                    Add new employee
                                 </button>
                             </a>
                         </div>
@@ -112,9 +112,11 @@ include "../config.php";
                                             <th>Email</th>
                                             <th>Phone number</th>
                                             <th>Department</th>
+                                            <th>Status</th> <!-- Thêm cột Status -->
                                             <th>Action</th>
                                         </tr>
                                     </thead>
+
                                     <tbody>
                                         <?php if (count($employees) > 0): ?>
                                             <?php foreach ($employees as $employee): ?>
@@ -125,8 +127,19 @@ include "../config.php";
                                                     <td><?= htmlspecialchars($employee['PhoneNumber']); ?></td>
                                                     <td><?= htmlspecialchars($employee['DepartmentName']); ?></td>
                                                     <td>
+                                                        <?php if ($employee['Status'] == 'active'): ?>
+                                                            <span style="color: green;">Active</span>
+                                                        <?php else: ?>
+                                                            <span style="color: red;">Inactive</span>
+                                                        <?php endif; ?>
+                                                    </td>
+                                                    <td>
                                                         <a href="edit_employee.php?id=<?= $employee['Id']; ?>">Edit</a> |
-                                                        <a href="delete_employee.php?id=<?= $employee['Id']; ?>" onclick="return confirm('Are you sure to delete this employee?');">Delete</a>
+                                                        <?php if ($employee['Status'] == 'active'): ?>
+                                                            <a href="#" onclick="showStatusModal(<?= $employee['Id']; ?>, 'inactive')">Inactive</a>
+                                                        <?php else: ?>
+                                                            <a href="#" onclick="showStatusModal(<?= $employee['Id']; ?>, 'active')">Active</a>
+                                                        <?php endif; ?>
                                                     </td>
                                                 </tr>
                                             <?php endforeach; ?>
@@ -136,6 +149,7 @@ include "../config.php";
                                             </tr>
                                         <?php endif; ?>
                                     </tbody>
+
                                 </table>
                             </div>
                         </div>
@@ -175,6 +189,45 @@ include "../config.php";
             </div>
         </div>
 
+        <!-- Confirm Delete Modal -->
+        <div class="modal fade" id="deleteConfirmModal" tabindex="-1" role="dialog" aria-labelledby="deleteModalLabel" aria-hidden="true">
+            <div class="modal-dialog" role="document">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="deleteModalLabel">Confirm Inactivation</h5>
+                        <button class="close" type="button" data-dismiss="modal" aria-label="Close">
+                            <span aria-hidden="true">×</span>
+                        </button>
+                    </div>
+                    <div class="modal-body">Are you sure you want to inactive this employee?</div>
+                    <div class="modal-footer">
+                        <button class="btn btn-secondary" type="button" data-dismiss="modal">Cancel</button>
+                        <a class="btn btn-danger" id="confirmDeleteBtn" href="#">Inactive</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Confirm Status Change Modal -->
+        <div class="modal fade" id="statusConfirmModal" tabindex="-1" role="dialog" aria-labelledby="statusModalLabel" aria-hidden="true">
+            <div class="modal-dialog" role="document">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="statusModalLabel">Confirm Status Change</h5>
+                        <button class="close" type="button" data-dismiss="modal" aria-label="Close">
+                            <span aria-hidden="true">×</span>
+                        </button>
+                    </div>
+                    <div class="modal-body">Are you sure you want to change the status of this employee?</div>
+                    <div class="modal-footer">
+                        <button class="btn btn-secondary" type="button" data-dismiss="modal">Cancel</button>
+                        <a class="btn btn-primary" id="confirmStatusBtn" href="#">Change Status</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+
         <!-- Bootstrap core JavaScript-->
         <script src="../vendor/jquery/jquery.min.js"></script>
         <script src="../vendor/bootstrap/js/bootstrap.bundle.min.js"></script>
@@ -194,5 +247,29 @@ include "../config.php";
         <script src="../js/demo/chart-area-demo.js"></script>
         <script src="../js/demo/chart-area-demo.js"></script>
         <script src="../js/demo/datatables-demo.js"></script>
+
+        <script>
+            function showDeleteModal(employeeId) {
+                // Set the href attribute for confirmDeleteBtn with the employee ID
+                const confirmDeleteBtn = document.getElementById('confirmDeleteBtn');
+                confirmDeleteBtn.href = 'delete_employee.php?id=' + employeeId;
+
+                // Show the delete confirmation modal
+                $('#deleteConfirmModal').modal('show');
+            }
+        </script>
+
+        <script>
+            function showStatusModal(employeeId, newStatus) {
+                // Set the href attribute for confirmStatusBtn with the employee ID and new status
+                const confirmStatusBtn = document.getElementById('confirmStatusBtn');
+                confirmStatusBtn.href = 'change_status.php?id=' + employeeId + '&status=' + newStatus;
+
+                // Show the status confirmation modal
+                $('#statusConfirmModal').modal('show');
+            }
+        </script>
+    </div>
 </body>
+
 </html>

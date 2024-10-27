@@ -7,7 +7,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     $password = $_POST['password'];
 
     // Truy vấn PDO để kiểm tra người dùng có tồn tại không
-    $stmt = $conn->prepare("SELECT Id, FullName, Password, RoleID FROM user WHERE Email = :email");
+    $stmt = $conn->prepare("SELECT Id, FullName, Password, RoleID, Status FROM user WHERE Email = :email");
     $stmt->bindParam(':email', $email);
     $stmt->execute();
 
@@ -16,31 +16,36 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 
         // Kiểm tra mật khẩu
         if (password_verify($password, $row['Password'])) {
-            $_SESSION['user_id'] = $row['Id'];
-            $_SESSION['user_name'] = $row['FullName'];
-            $_SESSION['role_id'] = $row['RoleID'];
+            // Kiểm tra trạng thái tài khoản
+            if ($row['Status'] === 'active') {
+                $_SESSION['user_id'] = $row['Id'];
+                $_SESSION['user_name'] = $row['FullName'];
+                $_SESSION['role_id'] = $row['RoleID'];
 
-            // Phân quyền dựa trên RoleID
-            switch ($row['RoleID']) {
-                case 1: // Admin
-                    header("Location: admin/dashboard.php");
-                    break;
-                case 2: // Employee
-                    header("Location: employee/dashboard.php");
-                    break;
-                case 3: // Department Manager
-                    header("Location: department/dashboard.php");
-                    break;
-                default:
-                    echo "Unauthorized Access!";
-                    exit;
+                // Phân quyền dựa trên RoleID
+                switch ($row['RoleID']) {
+                    case 1: // Admin
+                        header("Location: admin/dashboard.php");
+                        break;
+                    case 2: // Employee
+                        header("Location: employee/dashboard.php");
+                        break;
+                    case 3: // Department Manager
+                        header("Location: department/dashboard.php");
+                        break;
+                    default:
+                        echo "Unauthorized Access!";
+                        exit;
+                }
+                exit();
+            } else {
+                $error = "Your account has been locked. Please contact the administrator for more information.";
             }
-            exit();
         } else {
-            echo "<script>alert('Password is incorrect!');window.location.href='login.php';</script>";
+            $error = "Password is incorrect!";
         }
     } else {
-        echo "<script>alert('Email is unavalible!');window.location.href='login.php';</script>";
+        $error = "Email does not exist!";
     }
 }
 
@@ -55,10 +60,8 @@ if (isset($_SESSION['user_id'])) {
     }
     exit(); // Dừng việc xử lý tiếp theo
 }
-// else {
-//     header("Location: /EMS/login.php");
-// }
 ?>
+
 
 
 <!DOCTYPE html>
