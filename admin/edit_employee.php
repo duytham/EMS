@@ -1,4 +1,5 @@
 <?php
+session_start(); // Bắt đầu phiên
 require_once '../config.php'; // Kết nối đến file config.php
 $errorMessage = ''; // Khởi tạo biến thông báo lỗi
 $successMessage = ''; // Khởi tạo biến thông báo thành công
@@ -62,14 +63,15 @@ if (isset($_GET['id'])) {
                 // Thực thi truy vấn
                 $stmt->execute();
 
-                // Thiết lập thông báo thành công
-                $successMessage = "Cập nhật nhân viên thành công!";
+                // Thiết lập thông báo thành công vào session
+                $_SESSION['successMessage'] = "Cập nhật nhân viên thành công!";
+
+                // Chuyển hướng về trang quản lý nhân viên hoặc trang hiện tại
+                $redirectUrl = isset($_GET['redirect']) ? $_GET['redirect'] : 'manage_employees.php';
+                header("Location: $redirectUrl");
+                exit(); // Dừng thực thi mã sau khi chuyển hướng
             } catch (PDOException $e) {
                 $errorMessage = "Lỗi: " . $e->getMessage();
-            }
-            if ($successMessage) {
-                // Chuyển hướng về trang quản lý nhân viên sau 1 giây
-                header("refresh:1; url=manage_employees.php");
             }
         }
     }
@@ -78,6 +80,8 @@ if (isset($_GET['id'])) {
 // Lấy danh sách phòng ban để hiển thị trong combobox
 $departments = $conn->query("SELECT * FROM `Department`")->fetchAll(PDO::FETCH_ASSOC);
 ?>
+
+
 
 
 <!DOCTYPE html>
@@ -131,7 +135,7 @@ $departments = $conn->query("SELECT * FROM `Department`")->fetchAll(PDO::FETCH_A
                 <?php include('../templates/navbar.php') ?>
 
                 <div class="container">
-                    <h2>Edit this employee</h2>
+                    <h2>Edit This Employee</h2>
                     <h6>Please fill in the blank. Click Update to save any change</h6>
                     <br></br>
 

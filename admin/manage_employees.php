@@ -1,4 +1,5 @@
 <?php
+session_start(); // Bắt đầu phiên
 require_once '../config.php';  // Sử dụng file config.php với PDO
 
 // Câu SQL để lấy danh sách nhân viên (trừ admin), bao gồm tên phòng ban
@@ -8,6 +9,29 @@ $sql = "
     LEFT JOIN `Department` d ON u.DepartmentID = d.id 
     WHERE u.RoleID != 1 and u.RoleID != 3
 ";
+
+$sql = "
+    SELECT u.Id, u.FullName, u.Email, u.PhoneNumber, 
+           d.DepartmentName AS ChildDepartment, 
+           pd.DepartmentName AS ParentDepartment, 
+           u.Status 
+    FROM `User` u 
+    LEFT JOIN `Department` d ON u.DepartmentID = d.id 
+    LEFT JOIN `Department` pd ON d.ParentDepartmentID = pd.id 
+    WHERE u.RoleID != 1 and u.RoleID != 3
+";
+
+// Kiểm tra thông báo thành công và lưu nó vào biến
+if (isset($_SESSION['successMessage'])) {
+    $successMessage = $_SESSION['successMessage'];
+    unset($_SESSION['successMessage']); // Xóa thông báo sau khi đã hiển thị
+}
+
+// Cũng có thể kiểm tra thông báo lỗi tương tự
+if (isset($_SESSION['errorMessage'])) {
+    $errorMessage = $_SESSION['errorMessage'];
+    unset($_SESSION['errorMessage']); // Xóa thông báo sau khi đã hiển thị
+}
 
 try {
     // Chuẩn bị câu truy vấn
@@ -84,19 +108,21 @@ include "../config.php";
                     <!-- Page Heading -->
                     <h1 class="h3 mb-2 text-gray-800">Employee List</h1>
                     <?php
-                    // Trước khi hiển thị danh sách nhân viên
-                    if (isset($_GET['success'])) {
-                        echo '<div class="alert alert-success">' . htmlspecialchars($_GET['success']) . '</div>';
-                    } elseif (isset($_GET['error'])) {
-                        echo '<div class="alert alert-danger">' . htmlspecialchars($_GET['error']) . '</div>';
+                    // Hiển thị thông báo thành công nếu có
+                    if (isset($_GET['success'])): ?>
+                        <div class="alert alert-success"><?php echo htmlspecialchars($_GET['success']); ?></div>
+                    <?php endif;
+
+                    // Hiển thị thông báo lỗi nếu có
+                    if (isset($errorMessage) && !empty($errorMessage)) {
+                        echo "<div class='alert alert-danger'>$errorMessage</div>";
                     }
                     ?>
                     <!-- DataTales Example -->
                     <div class="card shadow mb-4">
                         <div class="card-header py-3">
                             <a href="add_employee.php" class="btn btn-primary btn-icon-split">
-                                <span class="icon text-white-50">
-                                </span>
+                                <span class="icon text-white-50"></span>
                                 <button type="button" class="btn btn-primary" data-toggle="modal" data-target="#addEmployeeModal">
                                     Add new employee
                                 </button>
@@ -125,7 +151,16 @@ include "../config.php";
                                                     <td><?= htmlspecialchars($employee['FullName']); ?></td>
                                                     <td><?= htmlspecialchars($employee['Email']); ?></td>
                                                     <td><?= htmlspecialchars($employee['PhoneNumber']); ?></td>
-                                                    <td><?= htmlspecialchars($employee['DepartmentName']); ?></td>
+                                                    <td>
+                                                        <?php
+                                                        if (!empty($employee['ParentDepartment'])) {
+                                                            echo htmlspecialchars($employee['ParentDepartment']) . ' - ' . htmlspecialchars($employee['ChildDepartment']);
+                                                        } else {
+                                                            echo htmlspecialchars($employee['ChildDepartment']); // If no parent department, just show the child
+                                                        }
+                                                        ?>
+                                                    </td>
+
                                                     <td>
                                                         <?php if ($employee['Status'] == 'active'): ?>
                                                             <span style="color: green;">Active</span>
@@ -260,15 +295,16 @@ include "../config.php";
         </script>
 
         <script>
-            function showStatusModal(employeeId, newStatus) {
-                // Set the href attribute for confirmStatusBtn with the employee ID and new status
+            function showStatusModal(departmentId, newStatus) {
+                // Set the href attribute for confirmStatusBtn with the department ID and new status
                 const confirmStatusBtn = document.getElementById('confirmStatusBtn');
-                confirmStatusBtn.href = 'change_status.php?id=' + employeeId + '&status=' + newStatus;
+                confirmStatusBtn.href = 'change_status_employee.php?id=' + departmentId + '&status=' + newStatus;
 
                 // Show the status confirmation modal
                 $('#statusConfirmModal').modal('show');
             }
         </script>
+
     </div>
 </body>
 

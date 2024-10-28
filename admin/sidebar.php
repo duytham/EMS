@@ -26,6 +26,13 @@
         </a>
     </li>
 
+    <li class="nav-item">
+        <a class="nav-link" href="./manage_department.php">
+            <i class=""></i>
+            <span>Departments</span>
+        </a>
+    </li>
+
     <!-- Divider -->
     <hr class="sidebar-divider d-none d-md-block">
 

@@ -2,6 +2,9 @@
 require_once '../config.php'; // Kết nối đến file config.php
 $errorMessage = ''; // Khởi tạo biến thông báo lỗi
 
+// Nhận `department_id` nếu tồn tại trong URL
+$departmentID = isset($_GET['department_id']) ? $_GET['department_id'] : null;
+
 // Kiểm tra nếu có dữ liệu được gửi từ biểu mẫu
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     // Lấy dữ liệu từ biểu mẫu
@@ -52,7 +55,18 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 }
 
 // Lấy danh sách phòng ban để hiển thị trong combobox
-$departments = $conn->query("SELECT * FROM `Department`")->fetchAll(PDO::FETCH_ASSOC);
+// Lấy danh sách phòng ban và hiển thị theo cú pháp ParentDepartment - Department
+$departments = $conn->query("
+    SELECT 
+        d.id,
+        CASE 
+            WHEN pd.departmentname IS NOT NULL 
+            THEN CONCAT(pd.departmentname, ' - ', d.departmentname) 
+            ELSE d.departmentname 
+        END AS display_name
+    FROM `Department` d
+    LEFT JOIN `Department` pd ON d.parentdepartmentid = pd.id
+")->fetchAll(PDO::FETCH_ASSOC);
 ?>
 
 
@@ -66,7 +80,7 @@ $departments = $conn->query("SELECT * FROM `Department`")->fetchAll(PDO::FETCH_A
     <meta name="description" content="">
     <meta name="author" content="">
 
-    <title>Admin - EDMS - Add employee</title>
+    <title>Admin - EDMS - Add New Employee</title>
 
     <link href="../vendor/fontawesome-free/css/all.min.css" rel="stylesheet" type="text/css">
     <link href="https://fonts.googleapis.com/css?family=Nunito:200,200i,300,300i,400,400i,600,600i,700,700i,800,800i,900,900i" rel="stylesheet">
@@ -107,7 +121,7 @@ $departments = $conn->query("SELECT * FROM `Department`")->fetchAll(PDO::FETCH_A
                 <?php include('../templates/navbar.php') ?>
 
                 <div class="container">
-                    <h2>Add new employee</h2>
+                    <h2>Add New Employee<br><br></h2>
 
                     <?php if ($errorMessage): ?>
                         <div class="alert alert-danger"><?php echo $errorMessage; ?></div>
@@ -138,11 +152,13 @@ $departments = $conn->query("SELECT * FROM `Department`")->fetchAll(PDO::FETCH_A
                         </div>
 
                         <div class="form-group">
-                            <label for="departmentID">Phòng ban:</label>
+                            <label for="departmentID">Department:</label>
                             <select class="form-control" id="departmentID" name="departmentID" required>
-                                <?php foreach ($departments as $department): ?>
-                                    <option value="<?= $department['Id']; ?>"><?= $department['DepartmentName']; ?></option>
-                                <?php endforeach; ?>
+                                    <?php foreach ($departments as $department): ?>
+                                        <option value="<?= htmlspecialchars($department['id']) ?>">
+                                            <?= htmlspecialchars($department['display_name']) ?>
+                                        </option>
+                                    <?php endforeach; ?>
                             </select>
                         </div>
                         <button type="submit" class="btn btn-primary">Add employee</button>
