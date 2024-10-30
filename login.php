@@ -21,6 +21,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                 $_SESSION['user_id'] = $row['Id'];
                 $_SESSION['user_name'] = $row['FullName'];
                 $_SESSION['role_id'] = $row['RoleID'];
+                $_SESSION['email'] = $email; // Đảm bảo email được lưu vào session
 
                 // Phân quyền dựa trên RoleID
                 switch ($row['RoleID']) {
@@ -61,8 +62,6 @@ if (isset($_SESSION['user_id'])) {
     exit(); // Dừng việc xử lý tiếp theo
 }
 ?>
-
-
 
 <!DOCTYPE html>
 <html lang="en">

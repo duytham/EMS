@@ -40,7 +40,7 @@ if (!isset($_SESSION['user_id']) || $_SESSION['role_id'] != 2) {
     <div id="wrapper">
 
     <!-- Sidebar -->
-    <?php include('../templates/sidebar.php') ?>
+    <?php include('../employee/sidebar.php') ?>
 
         <!-- Content Wrapper -->
         <div id="content-wrapper" class="d-flex flex-column">

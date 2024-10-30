@@ -1,0 +1,6 @@
+{
+    "require": {
+        "psr/simple-cache": "^3.0",
+        "phpoffice/phpspreadsheet": "^3.3"
+    }
+}

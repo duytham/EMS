@@ -14,8 +14,6 @@ $sql = "SELECT d1.Id, d1.DepartmentName,
 $result = $conn->query($sql);
 $departments = $result->fetchAll(PDO::FETCH_ASSOC);
 
-
-
 $sql = "SELECT d1.Id, d1.DepartmentName, 
                d2.DepartmentName AS ParentDepartmentName, 
                COUNT(u.Id) AS EmployeeCount, 
@@ -25,10 +23,7 @@ $sql = "SELECT d1.Id, d1.DepartmentName,
         LEFT JOIN Department d2 ON d1.ParentDepartmentID = d2.Id
         LEFT JOIN `User` u ON u.DepartmentID = d1.Id
         GROUP BY d1.Id";
-
-
 ?>
-
 
 <!DOCTYPE html>
 <?php
