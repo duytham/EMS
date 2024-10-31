@@ -427,7 +427,6 @@ include "../config.php";
                 $('#statusConfirmModal').modal('show');
             }
         </script>
-
     </div>
 </body>
 

@@ -125,8 +125,6 @@ if (isset($_POST['import'])) {
             exit();
         }
 
-
-
         header("Location: manage_employees.php");
         exit();
     } else {
