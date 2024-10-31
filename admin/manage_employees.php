@@ -149,9 +149,7 @@ try {
 ?>
 
 <!DOCTYPE html>
-<?php
-include "../config.php";
-?>
+<?php include "../config.php"; ?>
 
 <html lang="en">
 
@@ -233,7 +231,6 @@ include "../config.php";
                                 <input type="file" name="employee_file" id="file" accept=".xlsx" class="form-control mr-2">
                                 <button type="submit" name="import" class="btn btn-success">Import</button>
                             </form>
-
 
                             <div class="d-flex align-items-center">
                                 <form action="download_template.php" method="post" class="d-inline">
@@ -384,7 +381,6 @@ include "../config.php";
                 </div>
             </div>
         </div>
-
 
         <!-- Bootstrap core JavaScript-->
         <script src="../vendor/jquery/jquery.min.js"></script>
