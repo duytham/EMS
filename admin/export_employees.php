@@ -85,7 +85,7 @@ for ($i = 0; $i < $fileCount; $i++) {
 $zipFilePath = $tempDir . '/employee_data.zip';
 $zip = new ZipArchive();
 if ($zip->open($zipFilePath, ZipArchive::CREATE | ZipArchive::OVERWRITE) !== TRUE) {
-    exit("Không thể mở file ZIP.");
+    exit("Can't open ZIP file.");
 }
 
 // Thêm tất cả các file Excel vào file ZIP

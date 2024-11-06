@@ -161,7 +161,7 @@ try {
     <meta name="description" content="">
     <meta name="author" content="">
 
-    <title>Admin - EDMS - Dashboard</title>
+    <title>Admin - EDMS - Manage Employees</title>
 
     <!-- Custom fonts for this template-->
     <link href="../vendor/fontawesome-free/css/all.min.css" rel="stylesheet" type="text/css">

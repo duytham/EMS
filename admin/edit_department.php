@@ -17,7 +17,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['submit'])) {
 
     try {
         // Cập nhật phòng ban
-        $stmt = $conn->prepare("UPDATE Department SET DepartmentName = ?, ParentDepartmentID = ? WHERE id = ?");
+        $stmt = $conn->prepare("UPDATE Department SET DepartmentName = ?, ParentDepartmentID = ? WHERE Id = ?");
         $stmt->execute([$departmentName, $parentDepartmentID, $departmentID]);
 
         // Kiểm tra số hàng được cập nhật
@@ -25,7 +25,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['submit'])) {
             header("Location: manage_department.php?status=success");
             exit();
         } else {
-            $message = "Không thể cập nhật phòng ban. Vui lòng thử lại.";
+            $message = "Unable to update the department. Please try again.";
         }
     } catch (PDOException $e) {
         $message = "Lỗi: " . $e->getMessage();
@@ -33,7 +33,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['submit'])) {
 }
 
 // Lấy thông tin phòng ban hiện tại
-$stmt = $conn->prepare("SELECT DepartmentName, ParentDepartmentID, Status FROM Department WHERE id = ?");
+$stmt = $conn->prepare("SELECT DepartmentName, ParentDepartmentID, Status FROM Department WHERE Id = ?");
 $stmt->execute([$departmentID]);
 $department = $stmt->fetch(PDO::FETCH_ASSOC);
 
@@ -47,27 +47,48 @@ if (isset($_GET['toggle_status'])) {
     $departmentID = $_GET['toggle_status'];
 
     // Lấy trạng thái hiện tại
-    $stmt = $conn->prepare("SELECT Status FROM Department WHERE id = ?");
+    $stmt = $conn->prepare("SELECT Status FROM Department WHERE Id = ?");
     $stmt->execute([$departmentID]);
     $department = $stmt->fetch(PDO::FETCH_ASSOC);
 
     if ($department) {
         // Chuyển đổi trạng thái
-        $newStatus = ($department['Status'] == 1) ? 0 : 1;
-        $stmt = $conn->prepare("UPDATE Department SET Status = ? WHERE id = ?");
+        $newStatus = ($department['Status'] === 'Active') ? 'Inactive' : 'Active';
+
+        // Cập nhật trạng thái phòng ban
+        $stmt = $conn->prepare("UPDATE Department SET Status = ? WHERE Id = ?");
         $stmt->execute([$newStatus, $departmentID]);
 
-        // Kiểm tra xem cập nhật thành công hay không
+        // Nếu trạng thái chuyển sang Inactive, cập nhật trạng thái cho tất cả users trong department
+        if ($newStatus === 'Inactive') {
+            // Cập nhật trạng thái của tất cả user trong phòng ban
+            $stmt = $conn->prepare("UPDATE User SET Status = 'Inactive' WHERE DepartmentID = ?");
+            $stmt->execute([$departmentID]);
+
+            // Cập nhật trạng thái của người phụ trách phòng ban
+            $stmt = $conn->prepare("UPDATE User SET Status = 'Inactive' WHERE DepartmentID = ? AND RoleID = 3"); // RoleID = 3 là role department
+            $stmt->execute([$departmentID]);
+
+            // Kiểm tra xem cập nhật trạng thái của người phụ trách có thành công không
+            if ($stmt->rowCount() > 0) {
+                echo "The status of the person in charge of the department has been updated successfully.";
+            } else {
+                echo "The person in charge status can't be updated.";
+            }
+        }
+
+        // Kiểm tra xem cập nhật trạng thái phòng ban có thành công không
         if ($stmt->rowCount() > 0) {
-            echo "Trạng thái đã được cập nhật thành công.";
+            echo "The department status has been updated successfully.";
         } else {
-            echo "Không thể cập nhật trạng thái.";
+            echo "Department status can't be updated.";
         }
     }
     header("Location: manage_department.php");
     exit();
 }
 ?>
+
 
 <!DOCTYPE html>
 <html lang="en">
@@ -124,12 +145,13 @@ if (isset($_GET['toggle_status'])) {
                                 <button type="submit" name="submit" class="btn btn-primary btn-block">Update Department</button>
                             </form>
                             <br>
-                            <!-- Nút chuyển đổi trạng thái -->
+
+                            <!-- Nút chuyển đổi trạng thái
                             <form action="edit_department.php?id=<?php echo $departmentID; ?>" method="GET">
                                 <button type="submit" name="toggle_status" class="btn btn-warning btn-block">
                                     <?php echo $department['Status'] == 1 ? 'Deactivate Department' : 'Activate Department'; ?>
                                 </button>
-                            </form>
+                            </form> -->
                         </div>
                     </div>
                 </div>

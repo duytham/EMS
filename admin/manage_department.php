@@ -40,7 +40,7 @@ include "../config.php";
     <meta name="description" content="">
     <meta name="author" content="">
 
-    <title>Admin - EDMS - Dashboard</title>
+    <title>Admin - EDMS - Manage Departments</title>
 
     <!-- Custom fonts for this template-->
     <link href="../vendor/fontawesome-free/css/all.min.css" rel="stylesheet" type="text/css">
@@ -109,7 +109,8 @@ include "../config.php";
                                                 <th>Parent Department</th>
                                                 <th>Employee Count</th>
                                                 <th>Status</th>
-                                                <th>Employees</th> <!-- Cột mới -->
+                                                <th>Employees</th> <!-- Cột Employees -->
+                                                <th>Attendance</th> <!-- Cột mới -->
                                                 <th>Action</th>
                                             </tr>
                                         </thead>
@@ -129,9 +130,10 @@ include "../config.php";
                                                             <?php endif; ?>
                                                         </td>
                                                         <td>
-                                                            <a href="view_employee.php?department_id=<?= $department['Id']; ?>">
-                                                                View Employees
-                                                            </a>
+                                                            <a href="view_employee.php?department_id=<?= $department['Id']; ?>">View Employees</a>
+                                                        </td>
+                                                        <td>
+                                                            <a href="attendance.php?department_id=<?= $department['Id']; ?>">View Attendances</a>
                                                         </td>
                                                         <td>
                                                             <a href="edit_department.php?id=<?= $department['Id']; ?>">Edit</a> |
@@ -145,7 +147,7 @@ include "../config.php";
                                                 <?php endforeach; ?>
                                             <?php else: ?>
                                                 <tr>
-                                                    <td colspan="7">No departments available.</td>
+                                                    <td colspan="8">No departments available.</td>
                                                 </tr>
                                             <?php endif; ?>
                                         </tbody>

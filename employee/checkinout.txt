@@ -1,0 +1,83 @@
+<?php
+session_start();
+require '../config.php'; // Kết nối database
+
+// Set the correct time zone
+date_default_timezone_set('Asia/Ho_Chi_Minh');
+
+$userId = $_SESSION['user_id'] ?? null; // ID của user đang đăng nhập
+$roleId = $_SESSION['role_id'] ?? null; // Role ID của user đang đăng nhập
+
+// // Debugging session variables
+// echo "User ID: " . $userId . "<br>";
+// echo "Role: " . ($roleId ?? 'not set') . "<br>";
+// echo "Server time: " . date('Y-m-d H:i:s') . "<br>";
+// echo "Server time zone: " . date_default_timezone_get() . "<br>";
+
+if (!isset($userId) || $roleId != 2) {
+    echo "Redirecting to login...<br>";
+    header("Location: ../login.php");
+    exit();
+}
+
+// Kiểm tra trạng thái check-in/check-out của nhân viên trong ngày
+$logDate = date('Y-m-d');
+$stmt = $conn->prepare("SELECT * FROM CheckInOut WHERE UserID = :userId AND LogDate = :logDate");
+$stmt->execute(['userId' => $userId, 'logDate' => $logDate]);
+$attendanceLog = $stmt->fetch(PDO::FETCH_ASSOC);
+
+// Xử lý khi nhấn nút Check-in
+if (isset($_POST['checkin'])) {
+    if (!$attendanceLog) {
+        // Thêm bản ghi check-in nếu chưa có log trong ngày
+        $stmt = $conn->prepare("INSERT INTO CheckInOut (UserID, CheckInTime, LogDate) VALUES (:userId, :checkInTime, :logDate)");
+        $stmt->execute(['userId' => $userId, 'checkInTime' => date('Y-m-d H:i:s'), 'logDate' => $logDate]);
+        $_SESSION['successMessage'] = "Check-in thành công!";
+    } else {
+        $_SESSION['errorMessage'] = "Bạn đã check-in hôm nay!";
+    }
+    header("Location: checkinout.php");
+    exit();
+}
+
+// Xử lý khi nhấn nút Check-out
+if (isset($_POST['checkout'])) {
+    if ($attendanceLog && !$attendanceLog['CheckOutTime']) {
+        // Cập nhật thời gian check-out nếu đã có check-in và chưa check-out
+        $stmt = $conn->prepare("UPDATE CheckInOut SET CheckOutTime = :checkOutTime WHERE Id = :id");
+        $stmt->execute(['checkOutTime' => date('Y-m-d H:i:s'), 'id' => $attendanceLog['Id']]);
+        $_SESSION['successMessage'] = "Check-out thành công!";
+    } else {
+        $_SESSION['errorMessage'] = $attendanceLog ? "Bạn đã check-out hôm nay!" : "Bạn cần check-in trước!";
+    }
+    header("Location: checkinout.php");
+    exit();
+}
+?>
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Chấm công</title>
+</head>
+<body>
+    <h2>Chấm công</h2>
+    <?php if (isset($_SESSION['successMessage'])): ?>
+        <p style="color:green;"><?php echo $_SESSION['successMessage']; unset($_SESSION['successMessage']); ?></p>
+    <?php endif; ?>
+    <?php if (isset($_SESSION['errorMessage'])): ?>
+        <p style="color:red;"><?php echo $_SESSION['errorMessage']; unset($_SESSION['errorMessage']); ?></p>
+    <?php endif; ?>
+
+    <form method="POST">
+        <button type="submit" name="checkin" <?php echo ($attendanceLog && $attendanceLog['CheckInTime']) ? 'disabled' : ''; ?>>Check-in</button>
+        <button type="submit" name="checkout" <?php echo ($attendanceLog && !$attendanceLog['CheckOutTime']) ? '' : 'disabled'; ?>>Check-out</button>
+    </form>
+
+    <?php if ($attendanceLog): ?>
+        <p>Check-in Time: <?php echo date('d-m-Y H:i:s', strtotime($attendanceLog['CheckInTime'])); ?></p>
+        <p>Check-out Time: <?php echo $attendanceLog['CheckOutTime'] ? date('d-m-Y H:i:s', strtotime($attendanceLog['CheckOutTime'])) : "Chưa check-out"; ?></p>
+    <?php endif; ?>
+</body>
+</html>

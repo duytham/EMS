@@ -6,26 +6,24 @@
         <div class="sidebar-brand-icon rotate-n-15">
             <i class="fas fa-laugh-wink"></i>
         </div>
-        <div class="sidebar-brand-text mx-3">EMS EMP <sup>2</sup></div>
+        <div class="sidebar-brand-text mx-3">EMS DEPT <sup>2</sup></div>
     </a>
 
     <!-- Divider -->
     <hr class="sidebar-divider my-0">
 
-    <!-- Nav Item - Dashboard -->
-    <li class="nav-item active">
-        <a class="nav-link" href="../employee/dashboard.php">
-            <i class="fas fa-fw fa-tachometer-alt"></i>
-            <span>Dashboard</span></a>
-    </li>
-    
     <li class="nav-item">
-        <a class="nav-link" href="./monthly_work_summary.php">
+        <a class="nav-link" href="">
             <i class=""></i>
-            <span>Attendances</span>
+            <span>Employees</span>
         </a>
     </li>
 
+    <li class="nav-item">
+        <a class="nav-link" href="">
+            <i class=""></i>
+            <span>Timekeeping</span></a>
+    </li>
     <!-- Divider -->
     <hr class="sidebar-divider d-none d-md-block">
 
