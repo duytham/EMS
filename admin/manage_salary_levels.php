@@ -21,7 +21,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         // Cập nhật mức lương hiện có
         $stmt = $conn->prepare("UPDATE salary_levels SET level = ?, monthly_salary = ?, daily_salary = ? WHERE id = ?");
         $stmt->execute([$level, $monthly_salary, $daily_salary, $id]);
-        $_SESSION['message'] = "Cập nhật hệ số bậc lương thành công.";
+        $_SESSION['message'] = "Successfully updated the salary grade coefficient.";
     } else {
         // Thêm mức lương mới
         $stmt = $conn->prepare("INSERT INTO salary_levels (level, monthly_salary, daily_salary) VALUES (?, ?, ?)");
