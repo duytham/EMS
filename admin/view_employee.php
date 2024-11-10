@@ -2,11 +2,44 @@
 // Kết nối tới database
 session_start(); // Khởi động phiên để sử dụng biến session
 include "../config.php";
+
 $errorMessage = ''; // Khởi tạo biến thông báo lỗi
 $successMessage = ''; // Khởi tạo biến thông báo thành công
 
 // Lấy department_id từ URL
 $departmentId = $_GET['department_id'] ?? null;
+
+// Đoạn mã PHP tương tự để lấy dữ liệu nhân viên và giờ làm việc
+$selectedMonth = $_GET['month'] ?? date('m');
+$selectedYear = $_GET['year'] ?? date('Y');
+$daysInMonth = cal_days_in_month(CAL_GREGORIAN, $selectedMonth, $selectedYear);
+
+// Truy vấn nhân viên và giờ làm việc
+$sqlEmployees = "SELECT Id, FullName FROM User WHERE DepartmentID = :departmentId";
+$stmt = $conn->prepare($sqlEmployees);
+$stmt->bindParam(':departmentId', $departmentId, PDO::PARAM_INT);
+$stmt->execute();
+$employees = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+$employeeWorkingHours = [];
+foreach ($employees as $employee) {
+    $employeeId = $employee['Id'];
+    $sqlWorkingHours = "
+        SELECT DAY(CheckInTime) as Day, 
+               SEC_TO_TIME(SUM(TIMESTAMPDIFF(SECOND, CheckInTime, CheckOutTime))) as TotalWorkingHours
+        FROM CheckInOut
+        WHERE UserID = :userId 
+        AND MONTH(CheckInTime) = :month 
+        AND YEAR(CheckInTime) = :year
+        GROUP BY DAY(CheckInTime)";
+
+    $stmt = $conn->prepare($sqlWorkingHours);
+    $stmt->bindParam(':userId', $employeeId);
+    $stmt->bindParam(':month', $selectedMonth);
+    $stmt->bindParam(':year', $selectedYear);
+    $stmt->execute();
+    $employeeWorkingHours[$employeeId] = $stmt->fetchAll(PDO::FETCH_KEY_PAIR);
+}
 
 // Kiểm tra xem có thông báo thành công trong session không
 if (isset($_SESSION['successMessage'])) {
@@ -55,9 +88,56 @@ $parentDepartmentName = $departmentInfo['parent_department_name'] ?? '';
 ?>
 
 <!DOCTYPE html>
-
-
 <html lang="en">
+<style>
+    .summary-title {
+        font-size: 1.5em;
+        font-weight: bold;
+        margin-bottom: 10px;
+        color: #333;
+        text-align: center;
+    }
+
+    .attendance-table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 20px;
+    }
+
+    .attendance-table th,
+    .attendance-table td {
+        padding: 10px;
+        text-align: center;
+        border: 1px solid #ddd;
+    }
+
+    .attendance-table th {
+        background-color: #f5f5f5;
+        color: #333;
+        font-weight: bold;
+    }
+
+    .attendance-table .name-column {
+        font-weight: bold;
+        background-color: #e6e6ff;
+    }
+
+    .attendance-table .date-column {
+        background-color: #f2f7fc;
+        font-weight: bold;
+    }
+
+    .highlight-cell {
+        background-color: #dff0d8;
+        font-weight: bold;
+        color: #333;
+    }
+
+    .total-row {
+        background-color: #f5f5f5;
+        font-weight: bold;
+    }
+</style>
 
 <head>
     <meta charset="utf-8">
@@ -152,43 +232,97 @@ $parentDepartmentName = $departmentInfo['parent_department_name'] ?? '';
                         </div>
                     </div>
                 </div>
+
+                <div class="summary-title">Attendance Summary</div>
+
+                <!-- Lọc tháng và năm -->
+                <form method="get" action="view_employee.php" style="text-align: center; margin-bottom: 20px;">
+                    <input type="hidden" name="department_id" value="<?= htmlspecialchars($departmentId) ?>">
+                    <select name="month">
+                        <?php for ($m = 1; $m <= 12; $m++): ?>
+                            <option value="<?= $m ?>" <?= $m == $selectedMonth ? 'selected' : '' ?>>
+                                <?= date('F', mktime(0, 0, 0, $m, 10)) ?>
+                            </option>
+                        <?php endfor; ?>
+                    </select>
+                    <select name="year">
+                        <?php for ($y = date('Y') - 5; $y <= date('Y'); $y++): ?>
+                            <option value="<?= $y ?>" <?= $y == $selectedYear ? 'selected' : '' ?>><?= $y ?></option>
+                        <?php endfor; ?>
+                    </select>
+                    <button type="submit">Filter</button>
+                </form>
+
+                <!-- Bảng Attendance Summary -->
+                <div class="table-responsive">
+                    <table class="attendance-table">
+                        <thead>
+                            <tr>
+                                <th class="name-column">Employee</th>
+                                <?php for ($day = 1; $day <= $daysInMonth; $day++): ?>
+                                    <th class="date-column"><?= $day ?></th>
+                                <?php endfor; ?>
+                                <th class="total-row">Total</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php foreach ($employees as $employee):
+                                $totalHours = 0; // Tổng số giờ của mỗi nhân viên
+                            ?>
+                                <tr>
+                                    <td class="name-column"><?= htmlspecialchars($employee['FullName']) ?></td>
+                                    <?php for ($day = 1; $day <= $daysInMonth; $day++):
+                                        $workingHours = $employeeWorkingHours[$employee['Id']][$day] ?? '-';
+                                        $isHighlighted = isset($employeeWorkingHours[$employee['Id']][$day]);
+                                        if ($isHighlighted) {
+                                            $hours = explode(":", $workingHours);
+                                            $totalHours += $hours[0] + $hours[1] / 60; // Tính tổng số giờ
+                                        }
+                                    ?>
+                                        <td class="<?= $isHighlighted ? 'highlight-cell' : '' ?>">
+                                            <?= $isHighlighted ? substr($workingHours, 0, 5) : '-' ?>
+                                        </td>
+                                    <?php endfor; ?>
+                                    <td class="total-row"><?= number_format($totalHours, 2) ?> hrs</td>
+                                </tr>
+                            <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                </div>
                 <?php include('../templates/footer.php') ?>
             </div>
-        </div>
 
-
-
-        <div class="modal fade" id="statusConfirmModal" tabindex="-1" role="dialog" aria-labelledby="statusModalLabel" aria-hidden="true">
-            <div class="modal-dialog" role="document">
-                <div class="modal-content">
-                    <div class="modal-header">
-                        <h5 class="modal-title" id="statusModalLabel">Confirm Status Change</h5>
-                        <button class="close" type="button" data-dismiss="modal" aria-label="Close">
-                            <span aria-hidden="true">&times;</span>
-                        </button>
-                    </div>
-                    <div class="modal-body">Are you sure you want to change the status of this employee?</div>
-                    <div class="modal-footer">
-                        <button class="btn btn-secondary" type="button" data-dismiss="modal">Cancel</button>
-                        <a class="btn btn-primary" id="confirmStatusBtn" href="#">Change Status</a>
+            <div class="modal fade" id="statusConfirmModal" tabindex="-1" role="dialog" aria-labelledby="statusModalLabel" aria-hidden="true">
+                <div class="modal-dialog" role="document">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title" id="statusModalLabel">Confirm Status Change</h5>
+                            <button class="close" type="button" data-dismiss="modal" aria-label="Close">
+                                <span aria-hidden="true">&times;</span>
+                            </button>
+                        </div>
+                        <div class="modal-body">Are you sure you want to change the status of this employee?</div>
+                        <div class="modal-footer">
+                            <button class="btn btn-secondary" type="button" data-dismiss="modal">Cancel</button>
+                            <a class="btn btn-primary" id="confirmStatusBtn" href="#">Change Status</a>
+                        </div>
                     </div>
                 </div>
             </div>
+
+            <script src="../vendor/jquery/jquery.min.js"></script>
+            <script src="../vendor/bootstrap/js/bootstrap.bundle.min.js"></script>
+            <script src="../vendor/jquery-easing/jquery.easing.min.js"></script>
+            <script src="../js/sb-admin-2.min.js"></script>
+
+            <script>
+                function showStatusModal(employeeId, newStatus) {
+                    const confirmStatusBtn = document.getElementById('confirmStatusBtn');
+                    confirmStatusBtn.href = 'change_status_employee.php?id=' + employeeId + '&status=' + newStatus;
+                    $('#statusConfirmModal').modal('show');
+                }
+            </script>
         </div>
-
-        <script src="../vendor/jquery/jquery.min.js"></script>
-        <script src="../vendor/bootstrap/js/bootstrap.bundle.min.js"></script>
-        <script src="../vendor/jquery-easing/jquery.easing.min.js"></script>
-        <script src="../js/sb-admin-2.min.js"></script>
-
-        <script>
-            function showStatusModal(employeeId, newStatus) {
-                const confirmStatusBtn = document.getElementById('confirmStatusBtn');
-                confirmStatusBtn.href = 'change_status_employee.php?id=' + employeeId + '&status=' + newStatus;
-                $('#statusConfirmModal').modal('show');
-            }
-        </script>
-    </div>
 </body>
 
 </html>

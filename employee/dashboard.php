@@ -33,35 +33,92 @@ if ($attendanceLog) {
     $checkInTime = new DateTime($attendanceLog['CheckInTime']);
     $checkOutTime = new DateTime($attendanceLog['CheckOutTime'] ?? 'now'); // Sử dụng 'now' nếu chưa check-out
     $interval = $checkInTime->diff($checkOutTime);
-    $totalWorkingTime = $interval->format('%h:%i'); // Định dạng giờ và phút
+    $totalWorkingTime = sprintf('%01d:%02d', $interval->h, $interval->i); // Định dạng giờ và phút
 }
 
 // Xử lý khi nhấn nút Check-in
 if (isset($_POST['checkin'])) {
     if (!$attendanceLog) {
-        // Thêm bản ghi check-in nếu chưa có log trong ngày
-        $stmt = $conn->prepare("INSERT INTO CheckInOut (UserID, CheckInTime, LogDate) VALUES (:userId, :checkInTime, :logDate)");
-        $stmt->execute(['userId' => $userId, 'checkInTime' => date('Y-m-d H:i:s'), 'logDate' => $logDate]);
-        $_SESSION['successMessage'] = "Check-in thành công!";
-        header("Location: dashboard.php"); // Chuyển hướng về dashboard
-        exit();
+        $checkInTime = date('Y-m-d H:i:s');
+        $checkInHour = (int)date('H', strtotime($checkInTime));
+        $status = ($checkInHour < 8) ? "Valid" : "Invalid";
+
+        // Thêm bản ghi check-in
+        $stmt = $conn->prepare("INSERT INTO CheckInOut (UserID, CheckInTime, LogDate, status) VALUES (:userId, :checkInTime, :logDate, :status)");
+        $stmt->execute([
+            'userId' => $userId,
+            'checkInTime' => $checkInTime,
+            'logDate' => $logDate,
+            'status' => $status
+        ]);
+
+        // Nếu check-in không hợp lệ, yêu cầu giải trình
+        if ($status == "Invalid") {
+            $_SESSION['errorMessage'] = "Invalid check-in. Please provide a reason by clicking the Check-in button below.";
+            $_SESSION['attendance_id'] = $conn->lastInsertId(); // Lưu lại ID để sử dụng trong form lý do
+        } else {
+            $_SESSION['successMessage'] = "Check-in successfully!";
+            header("Location: dashboard.php");
+            exit();
+        }
     } else {
-        $_SESSION['errorMessage'] = "You're already check-in today";
+        $_SESSION['errorMessage'] = "You're already checked-in today";
     }
 }
 
 // Xử lý khi nhấn nút Check-out
 if (isset($_POST['checkout'])) {
     if ($attendanceLog && !$attendanceLog['CheckOutTime']) {
-        // Cập nhật thời gian check-out nếu đã có check-in và chưa check-out
+        // Lấy thời gian check-out hiện tại
+        $checkOutTime = date('Y-m-d H:i:s');
+        $checkOutHour = (int)date('H', strtotime($checkOutTime));
+
+        // Cập nhật thời gian check-out
         $stmt = $conn->prepare("UPDATE CheckInOut SET CheckOutTime = :checkOutTime WHERE Id = :id");
-        $stmt->execute(['checkOutTime' => date('Y-m-d H:i:s'), 'id' => $attendanceLog['Id']]);
-        $_SESSION['successMessage'] = "Check-out successfully!";
-        header("Location: dashboard.php"); // Chuyển hướng về dashboard
-        exit();
+        $stmt->execute(['checkOutTime' => $checkOutTime, 'id' => $attendanceLog['Id']]);
+
+        // Kiểm tra điều kiện thời gian check-in và check-out
+        $checkInHour = (int)date('H', strtotime($attendanceLog['CheckInTime']));
+        $status = ($checkInHour < 8 && $checkOutHour > 17) ? "Valid" : "Invalid";
+
+        // Cập nhật trạng thái
+        $stmt = $conn->prepare("UPDATE CheckInOut SET status = :status WHERE Id = :id");
+        $stmt->execute(['status' => $status, 'id' => $attendanceLog['Id']]);
+
+        // Nếu check-out không hợp lệ, yêu cầu giải trình
+        if ($status == "Invalid") {
+            $_SESSION['errorMessage'] = "Invalid check-out. Please provide a reason by clicking the Check-out button again below.";
+            // Không chuyển hướng, sẽ hiển thị giao diện nhập lý do trên dashboard
+        } else {
+            $_SESSION['successMessage'] = "Check-out successfully!";
+            header("Location: dashboard.php"); // Chuyển hướng về dashboard
+            exit();
+        }
     } else {
-        $_SESSION['errorMessage'] = $attendanceLog ? "You're already check-in today" : "You need to check-in before";
+        $_SESSION['errorMessage'] = $attendanceLog ? "You're already checked-out today" : "You need to check-in first";
     }
+}
+
+// Xử lý khi người dùng gửi lý do
+if (isset($_POST['submit_reason'])) {
+    $reason = $_POST['reason'] ?? '';
+    $attendanceId = $_POST['attendance_id'] ?? null;
+
+    if ($attendanceId && !empty($reason)) {
+        try {
+            // Cập nhật lý do vào bảng CheckInOut
+            $stmt = $conn->prepare("UPDATE CheckInOut SET Reason = :reason, status = 'Pending' WHERE Id = :id");
+            $stmt->execute(['reason' => $reason, 'id' => $attendanceId]);
+
+            // Trả về thông báo thành công
+            echo "<br><div class='alert alert-success'>Reason has been successfully sent. Please wait for admin approval!</div>";
+        } catch (PDOException $e) {
+            echo "<div class='alert alert-danger'>Error occur: " . $e->getMessage() . "</div>";
+        }
+    } else {
+        echo "<div class='alert alert-warning'>Please provide a complete reason.</div>";
+    }
+    exit(); // Ngừng việc tải lại trang
 }
 
 // Thêm mã xử lý để lấy dữ liệu check-in/check-out cho các ngày trong tháng
@@ -313,6 +370,32 @@ include "../config.php";
             background-color: #dc3545;
             /* Chấm đỏ */
         }
+
+        .invalid-reason {
+            background-color: #f8d7da;
+            border-left: 5px solid #dc3545;
+            padding: 15px;
+            margin-top: 20px;
+            border-radius: 5px;
+        }
+
+        .invalid-reason h5 {
+            color: #dc3545;
+            margin-bottom: 10px;
+        }
+
+        .invalid-reason textarea {
+            width: 100%;
+            padding: 10px;
+            margin-bottom: 10px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+        }
+
+        .invalid-reason .btn-warning {
+            background-color: #ffc107;
+            border: none;
+        }
     </style>
 </head>
 
@@ -332,8 +415,7 @@ include "../config.php";
 
                 <?php include('../templates/navbar.php') ?>
 
-                <h2 class="text-center" style="margin-top: 20px; color: #343a40;"> Timekeeping</h2>
-
+                <h2 class="text-center" style="margin-top: 20px; color: #343a40;">Timekeeping</h2>
 
                 <div class="message">
                     <?php if (isset($_SESSION['successMessage'])): ?>
@@ -378,6 +460,18 @@ include "../config.php";
                                 <p><strong>Check-in Time:</strong> <?php echo date('d-m-Y H:i:s', strtotime($attendanceLog['CheckInTime'])); ?></p>
                                 <p><strong>Check-out Time:</strong> <?php echo $attendanceLog['CheckOutTime'] ? date('d-m-Y H:i:s', strtotime($attendanceLog['CheckOutTime'])) : " Not checked out"; ?></p>
                             </div>
+
+                            <?php if ($attendanceLog['status'] == 'Invalid'): ?>
+                                <div class="invalid-reason">
+                                    <h5>Reason for Invalid Check-in/ Check-out:</h5>
+                                    <form id="reasonForm">
+                                        <textarea name="reason" id="reason" class="form-control" rows="3" placeholder="Please provide the reason for invalid check-in/out" required></textarea>
+                                        <input type="hidden" name="attendance_id" id="attendance_id" value="<?php echo $attendanceLog['Id']; ?>">
+                                        <button type="submit" class="btn btn-warning mt-3">Submit Reason</button>
+                                    </form>
+                                    <div id="responseMessage"></div>
+                                </div>
+                            <?php endif; ?>
                         <?php endif; ?>
                     </div>
                 </div>
@@ -502,7 +596,31 @@ include "../config.php";
         <!-- Page level custom scripts -->
         <script src="../js/demo/chart-area-demo.js"></script>
         <script src="../js/demo/chart-area-demo.js"></script>
+        <script>
+            document.getElementById('reasonForm').addEventListener('submit', function(e) {
+                e.preventDefault(); // Ngăn không cho form submit thông thường
 
+                let reason = document.getElementById('reason').value;
+                let attendanceId = document.getElementById('attendance_id').value;
+
+                let formData = new FormData();
+                formData.append('reason', reason);
+                formData.append('attendance_id', attendanceId);
+                formData.append('submit_reason', true); // Để xác định yêu cầu từ form
+
+                // Gửi dữ liệu AJAX
+                fetch('dashboard.php', {
+                        method: 'POST',
+                        body: formData
+                    })
+                    .then(response => response.text())
+                    .then(data => {
+                        // Hiển thị thông báo thành công hoặc lỗi
+                        document.getElementById('responseMessage').innerHTML = data;
+                    })
+                    .catch(error => console.error('Error:', error));
+            });
+        </script>
 </body>
 
 </html>

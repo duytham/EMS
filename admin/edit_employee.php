@@ -1,8 +1,13 @@
 <?php
-session_start(); // Bắt đầu phiên
+session_start();
 require_once '../config.php'; // Kết nối đến file config.php
-$errorMessage = ''; // Khởi tạo biến thông báo lỗi
-$successMessage = ''; // Khởi tạo biến thông báo thành công
+$errorMessage = '';
+$successMessage = '';
+
+// Fetch salary levels
+$stmt = $conn->prepare("SELECT * FROM salary_levels ORDER BY level");
+$stmt->execute();
+$salary_levels = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 // Kiểm tra nếu có ID nhân viên được gửi từ URL
 if (isset($_GET['id'])) {
@@ -14,75 +19,68 @@ if (isset($_GET['id'])) {
     $stmt->execute();
     $user = $stmt->fetch(PDO::FETCH_ASSOC);
 
-    // Kiểm tra nếu nhân viên tồn tại
     if (!$user) {
         $errorMessage = "Nhân viên không tồn tại.";
     }
 
-    // Kiểm tra nếu có dữ liệu được gửi từ biểu mẫu
+    // Lấy thông tin cấu hình email của nhân viên (nếu có)
+    $stmtEmailConfig = $conn->prepare("SELECT * FROM emailConfig WHERE userId = :userId");
+    $stmtEmailConfig->bindParam(':userId', $userId);
+    $stmtEmailConfig->execute();
+    $emailConfig = $stmtEmailConfig->fetch(PDO::FETCH_ASSOC);
+
+    // Đảm bảo gán giá trị mặc định cho checkInTime và checkOutTime nếu không có dữ liệu
+    $checkInTime = isset($emailConfig['checkInTime']) ? $emailConfig['checkInTime'] : '08:00';
+    $checkOutTime = isset($emailConfig['checkOutTime']) ? $emailConfig['checkOutTime'] : '17:00';
+
     if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         // Lấy dữ liệu từ biểu mẫu
         $fullName = $_POST['fullName'];
         $email = $_POST['email'];
         $phoneNumber = $_POST['phoneNumber'];
-        $departmentID = $_POST['departmentID']; // ID của phòng ban
-        $password = isset($_POST['password']) ? $_POST['password'] : ''; // Mật khẩu
+        $departmentID = $_POST['departmentID'];
+        $password = isset($_POST['password']) ? $_POST['password'] : '';
+        $checkInTime = $_POST['checkInTime'];
+        $checkOutTime = $_POST['checkOutTime'];
 
-        // Kiểm tra xem email đã tồn tại hay chưa (trừ email hiện tại)
+        // Kiểm tra xem email đã tồn tại hay chưa
         $emailCheck = $conn->prepare("SELECT * FROM `User` WHERE Email = :email AND Id != :id");
         $emailCheck->bindParam(':email', $email);
         $emailCheck->bindParam(':id', $userId);
         $emailCheck->execute();
 
+
         if ($emailCheck->rowCount() > 0) {
             $errorMessage = "Email đã tồn tại. Vui lòng sử dụng email khác.";
         } else {
-            // Mã hóa mật khẩu nếu được cung cấp
-            if (!empty($password)) {
-                $hashedPassword = password_hash($password, PASSWORD_DEFAULT);
-                $sql = "UPDATE `User` SET FullName = :fullName, Email = :email, PhoneNumber = :phoneNumber, DepartmentID = :departmentID, Password = :password WHERE Id = :id";
-            } else {
-                $sql = "UPDATE `User` SET FullName = :fullName, Email = :email, PhoneNumber = :phoneNumber, DepartmentID = :departmentID WHERE Id = :id";
-            }
+            // Cập nhật thông tin nhân viên
+            $sql = "UPDATE `User` SET FullName = :fullName, Email = :email, PhoneNumber = :phoneNumber, DepartmentID = :departmentID WHERE Id = :id";
+            $stmt = $conn->prepare($sql);
+            $stmt->bindParam(':fullName', $fullName);
+            $stmt->bindParam(':email', $email);
+            $stmt->bindParam(':phoneNumber', $phoneNumber);
+            $stmt->bindParam(':departmentID', $departmentID);
+            $stmt->bindParam(':id', $userId);
+            $stmt->execute();
 
-            try {
-                // Chuẩn bị câu truy vấn
-                $stmt = $conn->prepare($sql);
+            // Cập nhật cấu hình email
+            $updateEmailConfig = "UPDATE emailConfig SET checkInTime = :checkInTime, checkOutTime = :checkOutTime WHERE userId = :userId";
+            $stmtEmail = $conn->prepare($updateEmailConfig);
+            $stmtEmail->bindParam(':checkInTime', $checkInTime);
+            $stmtEmail->bindParam(':checkOutTime', $checkOutTime);
+            $stmtEmail->bindParam(':userId', $userId);
+            $stmtEmail->execute();
 
-                // Ràng buộc giá trị
-                $stmt->bindParam(':fullName', $fullName);
-                $stmt->bindParam(':email', $email);
-                $stmt->bindParam(':phoneNumber', $phoneNumber);
-                $stmt->bindParam(':departmentID', $departmentID);
-                $stmt->bindParam(':id', $userId);
-
-                if (!empty($password)) {
-                    $stmt->bindParam(':password', $hashedPassword); // Ràng buộc mật khẩu đã mã hóa
-                }
-
-                // Thực thi truy vấn
-                $stmt->execute();
-
-                // Thiết lập thông báo thành công vào session
-                $_SESSION['successMessage'] = "Cập nhật nhân viên thành công!";
-
-                // Chuyển hướng về trang quản lý nhân viên hoặc trang hiện tại
-                $redirectUrl = isset($_GET['redirect']) ? $_GET['redirect'] : 'manage_employees.php';
-                header("Location: $redirectUrl");
-                exit(); // Dừng thực thi mã sau khi chuyển hướng
-            } catch (PDOException $e) {
-                $errorMessage = "Lỗi: " . $e->getMessage();
-            }
+            $_SESSION['successMessage'] = "Cập nhật nhân viên và cấu hình email thành công!";
+            header("Location: manage_employees.php");
+            exit();
         }
     }
 }
 
-// Lấy danh sách phòng ban để hiển thị trong combobox
+// Lấy danh sách phòng ban
 $departments = $conn->query("SELECT * FROM `Department`")->fetchAll(PDO::FETCH_ASSOC);
 ?>
-
-
-
 
 <!DOCTYPE html>
 <html lang="en">
@@ -94,7 +92,7 @@ $departments = $conn->query("SELECT * FROM `Department`")->fetchAll(PDO::FETCH_A
     <meta name="description" content="">
     <meta name="author" content="">
 
-    <title>Admin - EDMS - Edit employee</title>
+    <title>Admin - EDMS - Edit Employee</title>
 
     <link href="../vendor/fontawesome-free/css/all.min.css" rel="stylesheet" type="text/css">
     <link href="https://fonts.googleapis.com/css?family=Nunito:200,200i,300,300i,400,400i,600,600i,700,700i,800,800i,900,900i" rel="stylesheet">
@@ -176,9 +174,33 @@ $departments = $conn->query("SELECT * FROM `Department`")->fetchAll(PDO::FETCH_A
                                 </div>
                             </div>
                         </div>
+
                         <div class="form-group">
                             <label for="password">New Password (leave blank to keep current):</label>
                             <input type="password" class="form-control" id="password" name="password">
+                        </div>
+
+                        <div class="form-group">
+                            <label for="checkInTime">Check-in Time:</label>
+                            <input type="time" class="form-control" id="checkInTime" name="checkInTime" value="<?= htmlspecialchars($checkInTime) ?>" required>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="checkOutTime">Check-out Time:</label>
+                            <input type="time" class="form-control" id="checkOutTime" name="checkOutTime" value="<?= htmlspecialchars($checkOutTime) ?>" required>
+                        </div>
+
+                        <!-- Add this inside the employee edit form -->
+                        
+                        <div class="form-group">
+                            <label for="salary_level">Salary Level:</label>
+                            <select class="form-control" id="salary_level" name="salary_level" required>
+                                <?php foreach ($salary_levels as $level): ?>
+                                    <option value="<?= $level['id'] ?>" <?= $level['id'] == $user['salary_level_id'] ? 'selected' : '' ?>>
+                                        Level <?= $level['level'] ?> - Monthly: <?= number_format($level['monthly_salary'], 0, ',', '.') ?> VND, Daily: <?= number_format($level['daily_salary'], 0, ',', '.') ?> VND
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
                         </div>
                         <button type="submit" class="btn btn-primary">Update Employee</button>
                     </form>

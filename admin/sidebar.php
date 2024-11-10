@@ -33,6 +33,20 @@
         </a>
     </li>
 
+    <li class="nav-item">
+        <a class="nav-link" href="./attendance_request.php">
+            <i class=""></i>
+            <span>Attendance Requests</span>
+        </a>
+    </li>
+
+    <li class="nav-item">
+        <a class="nav-link" href="./manage_salary_levels.php">
+            <i class=""></i>
+            <span>Salary Levels</span>
+        </a>
+    </li>
+
     <!-- Divider -->
     <hr class="sidebar-divider d-none d-md-block">
 

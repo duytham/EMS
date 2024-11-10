@@ -27,6 +27,91 @@ $departments = $stmt->fetchAll(PDO::FETCH_ASSOC);
 <!DOCTYPE html>
 <html lang="en">
 
+<style>
+    body {
+        font-family: 'Nunito', sans-serif;
+        background-color: #f8f9fc;
+    }
+
+    .department-header {
+        cursor: pointer;
+        padding: 15px;
+        background-color: #4e73df;
+        /* Màu xanh dịu hơn */
+        color: white;
+        border-radius: 5px;
+        margin-bottom: 10px;
+        transition: background-color 0.3s, transform 0.3s;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+    }
+
+    .department-header:hover {
+        background-color: #2e59d9;
+        /* Màu tối hơn khi hover */
+        transform: scale(1.02);
+    }
+
+    .sub-departments {
+        max-height: 0;
+        overflow: hidden;
+        transition: max-height 0.5s ease-out;
+        background-color: #f1f1f1;
+        /* Màu nền nhẹ cho các phòng ban con */
+        border: 1px solid #ddd;
+        border-radius: 5px;
+        margin-bottom: 10px;
+        padding: 10px;
+    }
+
+    .sub-departments.show {
+        max-height: 500px;
+        /* Giới hạn chiều cao tối đa để tạo hiệu ứng */
+    }
+
+    .card {
+        transition: transform 0.2s, box-shadow 0.2s;
+        margin: 10px;
+        border: 1px solid #ddd;
+        border-radius: 5px;
+        background-color: #ffffff;
+        /* Màu nền trắng cho thẻ */
+        box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+    }
+
+    .card:hover {
+        transform: scale(1.05);
+        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+    }
+
+    .card-body {
+        padding: 15px;
+    }
+
+    .text-warning {
+        color: #ffc107;
+    }
+
+    .row {
+        display: flex;
+        flex-wrap: wrap;
+        /* Cho phép các thẻ xuống dòng */
+        margin: -10px;
+        /* Giảm khoảng cách giữa các thẻ */
+    }
+
+    .col-xl-4 {
+        flex: 0 0 33.333%;
+        /* Chiều rộng 1/3 cho 3 thẻ mỗi hàng */
+        max-width: 33.333%;
+        /* Chiều rộng tối đa */
+        padding: 10px;
+        /* Khoảng cách giữa các thẻ */
+    }
+</style>
+
 <head>
     <meta charset="utf-8">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
@@ -48,38 +133,51 @@ $departments = $stmt->fetchAll(PDO::FETCH_ASSOC);
                 <div class="container">
                     <div class="row">
                         <?php
-                        // Create an array to group departments by parent department
+                        // Tạo một mảng để nhóm các phòng ban theo phòng ban cha
                         $departmentHierarchy = [];
+                        $departmentCounts = []; // Mảng để lưu trữ số lượng phòng ban con
+
                         foreach ($departments as $department) {
                             $parentName = $department['ParentDepartmentName'] ?: 'No Parent Department';
                             $departmentHierarchy[$parentName][] = $department;
+                            if (!isset($departmentCounts[$parentName])) {
+                                $departmentCounts[$parentName] = 0;
+                            }
+                            $departmentCounts[$parentName]++;
                         }
 
-                        // Display departments based on the parent-child structure
+                        // Hiển thị các phòng ban dựa trên cấu trúc cha-con
                         foreach ($departmentHierarchy as $parentName => $subDepartments): ?>
                             <div class="col-xl-12 mb-4">
-                                <h5 class="text-gray-800 font-weight-bold"><?php echo htmlspecialchars($parentName); ?></h5>
-                                <div class="row">
-                                    <?php foreach ($subDepartments as $department): ?>
-                                        <div class="col-xl-4 col-md-6 mb-4">
-                                            <a href="view_employee.php?department_id=<?php echo $department['DepartmentId']; ?>" style="text-decoration: none;">
-                                                <div class="card border-left-warning shadow h-100 py-2">
-                                                    <div class="card-body">
-                                                        <div class="row no-gutters align-items-center">
-                                                            <div class="col mr-2">
-                                                                <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">
-                                                                    <?php echo htmlspecialchars($department['DepartmentName']); ?>
-                                                                </div>
-                                                                <div class="h5 mb-0 font-weight-bold text-gray-800">
-                                                                    <?php echo htmlspecialchars($department['TotalEmployees']); ?>
+                                <div class="department-header" onclick="toggleSubDepartments('<?php echo htmlspecialchars($parentName); ?>')">
+                                    <h5 class="text-gray-800 font-weight-bold">
+                                        <?php echo htmlspecialchars($parentName); ?> (<?php echo $departmentCounts[$parentName]; ?>)
+                                    </h5>
+                                    <i class="fas fa-chevron-down"></i> <!-- Thêm biểu tượng mũi tên -->
+                                </div>
+                                <div class="sub-departments" id="<?php echo htmlspecialchars($parentName); ?>">
+                                    <div class="row">
+                                        <?php foreach ($subDepartments as $department): ?>
+                                            <div class="col-xl-4 col-md-6 mb-4">
+                                                <a href="view_employee.php?department_id=<?php echo $department['DepartmentId']; ?>" style="text-decoration: none;">
+                                                    <div class="card shadow h-100 py-2">
+                                                        <div class="card-body">
+                                                            <div class="row no-gutters align-items-center">
+                                                                <div class="col mr-2">
+                                                                    <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">
+                                                                        <?php echo htmlspecialchars($department['DepartmentName']); ?>
+                                                                    </div>
+                                                                    <div class="h5 mb-0 font-weight-bold text-gray-800">
+                                                                        <?php echo htmlspecialchars($department['TotalEmployees']); ?>
+                                                                    </div>
                                                                 </div>
                                                             </div>
                                                         </div>
                                                     </div>
-                                                </div>
-                                            </a>
-                                        </div>
-                                    <?php endforeach; ?>
+                                                </a>
+                                            </div>
+                                        <?php endforeach; ?>
+                                    </div>
                                 </div>
                             </div>
                         <?php endforeach; ?>
@@ -117,6 +215,23 @@ $departments = $stmt->fetchAll(PDO::FETCH_ASSOC);
     <script src="../vendor/bootstrap/js/bootstrap.bundle.min.js"></script>
     <script src="../vendor/jquery-easing/jquery.easing.min.js"></script>
     <script src="../js/sb-admin-2.min.js"></script>
+
+    <script>
+        function toggleSubDepartments(parentName) {
+            var subDepartments = document.getElementById(parentName);
+            subDepartments.classList.toggle('show');
+
+            // Thay đổi biểu tượng mũi tên
+            var icon = subDepartments.previousElementSibling.querySelector('i');
+            if (subDepartments.classList.contains('show')) {
+                icon.classList.remove('fa-chevron-down');
+                icon.classList.add('fa-chevron-up');
+            } else {
+                icon.classList.remove('fa-chevron-up');
+                icon.classList.add('fa-chevron-down');
+            }
+        }
+    </script>
 </body>
 
 </html>
