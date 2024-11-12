@@ -17,6 +17,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     $id = $_POST['id'] ?? null;
 
+    // Check for duplicate salary level
+    $stmt = $conn->prepare("SELECT * FROM salary_levels WHERE level = ? AND (id != ? OR ? IS NULL)");
+    $stmt->execute([$level, $id, $id]);
+    if ($stmt->fetch()) {
+        $_SESSION['error_message'] = "Salary level $level already exists. Please choose a different level.";
+        header('Location: manage_salary_levels.php');
+        exit();
+    }
+
     if ($id) {
         // Cập nhật mức lương hiện có
         $stmt = $conn->prepare("UPDATE salary_levels SET level = ?, monthly_salary = ?, daily_salary = ? WHERE id = ?");
@@ -74,6 +83,13 @@ $salary_levels = $stmt->fetchAll(PDO::FETCH_ASSOC);
                 <div class="container">
                     <h2>Manage Salary Levels</h2>
 
+                    <?php if (isset($_SESSION['error_message'])): ?>
+                        <div class="alert alert-danger">
+                            <?= $_SESSION['error_message'] ?>
+                        </div>
+                        <?php unset($_SESSION['error_message']); ?>
+                    <?php endif; ?>
+
                     <?php if (isset($_SESSION['message'])): ?>
                         <div class="alert alert-success">
                             <?= $_SESSION['message'] ?>
@@ -120,7 +136,7 @@ $salary_levels = $stmt->fetchAll(PDO::FETCH_ASSOC);
                                             <td><?= htmlspecialchars(number_format($level['daily_salary'], 0, ',', '.')) . ' đ' ?></td>
                                             <td>
                                                 <button class="btn btn-warning btn-sm" onclick="editSalaryLevel(<?= htmlspecialchars(json_encode($level)) ?>)">Edit</button>
-                                                <a href="manage_salary_levels.php?delete=<?= htmlspecialchars($level['id']) ?>" class="btn btn-danger btn-sm">Delete</a>
+                                                <button class="btn btn-danger btn-sm" onclick="confirmDelete(<?= htmlspecialchars($level['id']) ?>)">Delete</button>
                                             </td>
                                         </tr>
                                     <?php endforeach; ?>
@@ -131,14 +147,14 @@ $salary_levels = $stmt->fetchAll(PDO::FETCH_ASSOC);
                             function editSalaryLevel(level) {
                                 document.getElementById('id').value = level.id;
                                 document.getElementById('level').value = level.level;
-                                document.getElementById('monthly_salary').value = level.monthly_salary;
-                                document.getElementById('daily_salary').value = level.daily_salary;
+                                document.getElementById('monthly_salary').value = formatNumberForEdit(level.monthly_salary);
+                                document.getElementById('daily_salary').value = formatNumberForEdit(level.daily_salary);
                             }
 
                             function formatNumber(input) {
-                                // Xóa tất cả ký tự không phải số
+                                // Remove all non-digit characters
                                 let value = input.value.replace(/[^0-9]/g, '');
-                                // Định dạng số theo hàng triệu, trăm, chục
+                                // Add thousand separators
                                 value = value.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
                                 input.value = value;
                             }
@@ -152,8 +168,18 @@ $salary_levels = $stmt->fetchAll(PDO::FETCH_ASSOC);
                                 formatNumber(this);
                             });
 
+                            // Định dạng số với dấu phân tách hàng nghìn cho chế độ edit
                             function formatNumberForEdit(number) {
-                                return number.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+                                // Làm tròn số về số nguyên rồi định dạng dấu phân tách hàng nghìn
+                                let roundedNumber = Math.round(number);
+                                return roundedNumber.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+                            }
+
+                            function confirmDelete(id) {
+                                // Set the delete URL with the specified ID in the confirmation button
+                                document.getElementById('confirmDeleteBtn').href = 'manage_salary_levels.php?delete=' + id;
+                                // Show the delete confirmation modal
+                                $('#deleteModal').modal('show');
                             }
                         </script>
                     </div>
@@ -179,6 +205,25 @@ $salary_levels = $stmt->fetchAll(PDO::FETCH_ASSOC);
                         <div class="modal-footer">
                             <button class="btn btn-secondary" type="button" data-dismiss="modal">Cancel</button>
                             <a class="btn btn-primary" href="/EMS/logout.php">Logout</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Delete Confirmation Modal -->
+            <div class="modal fade" id="deleteModal" tabindex="-1" role="dialog" aria-labelledby="deleteModalLabel" aria-hidden="true">
+                <div class="modal-dialog" role="document">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title" id="deleteModalLabel">Confirm Deletion</h5>
+                            <button class="close" type="button" data-dismiss="modal" aria-label="Close">
+                                <span aria-hidden="true">×</span>
+                            </button>
+                        </div>
+                        <div class="modal-body">Are you sure you want to delete this salary level?</div>
+                        <div class="modal-footer">
+                            <button class="btn btn-secondary" type="button" data-dismiss="modal">Cancel</button>
+                            <a class="btn btn-danger" id="confirmDeleteBtn" href="#">Delete</a>
                         </div>
                     </div>
                 </div>

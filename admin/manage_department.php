@@ -77,6 +77,7 @@ include "../config.php";
                     <!-- DataTales Example -->
                     <div class="container-fluid">
                         <h1 class="h3 mb-2 text-gray-800">Department List</h1>
+                        <p class="mb-4">Management department, including viewing the employee list, attendance of that department, along with adding new departments, editing, and disabling that department</p>
 
                         <?php if (isset($_GET['success'])): ?>
                             <div class="alert alert-success"><?= htmlspecialchars($_GET['success']); ?></div>

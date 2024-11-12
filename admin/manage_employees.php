@@ -197,6 +197,7 @@ try {
 
                     <!-- Page Heading -->
                     <h1 class="h3 mb-2 text-gray-800">Employee List</h1>
+                    <p class="mb-4">Displays the list of employees of departments, along with adding employees, downloading the employee list, and editing or disabling that employee..</p>
 
                     <?php if (isset($successMessage)): ?>
                         <div class="alert alert-success"><?= htmlspecialchars($successMessage) ?></div>

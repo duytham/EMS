@@ -42,31 +42,31 @@ $requests = $stmt->fetchAll();
 //             }
 //         }
 
-// Xử lý yêu cầu từ admin - cho phép thay đổi nhiều lần 
-if ($_SERVER['REQUEST_METHOD'] == 'POST') {
-    $attendanceId = $_POST['attendance_id'] ?? null;
+        //Xử lý yêu cầu từ admin - cho phép thay đổi nhiều lần 
+        if ($_SERVER['REQUEST_METHOD'] == 'POST') {
+            $attendanceId = $_POST['attendance_id'] ?? null;
 
-    if ($attendanceId) {
-        if (isset($_POST['accept'])) {
-            // Admin chọn Accept -> Cập nhật trạng thái thành 'Valid'
-            $stmt = $conn->prepare("UPDATE CheckInOut SET status = 'Valid' WHERE Id = :id");
-            if ($stmt->execute(['id' => $attendanceId])) {
-                $_SESSION['successMessage'] = "Request has been accepted and marked as Valid.";
-            } else {
-                $_SESSION['errorMessage'] = "Failed to accept the request. Please try again.";
-            }
-        } elseif (isset($_POST['reject'])) {
-            // Admin chọn Reject -> Cập nhật trạng thái thành 'Invalid'
-            $stmt = $conn->prepare("UPDATE CheckInOut SET status = 'Invalid' WHERE Id = :id");
-            if ($stmt->execute(['id' => $attendanceId])) {
-                $_SESSION['successMessage'] = "Request has been rejected and marked as Invalid.";
-            } else {
-                $_SESSION['errorMessage'] = "Failed to reject the request. Please try again.";
-            }
-        }
-        // Reload the page to show the updated list
-        header("Location: attendance_request.php"); // Đổi 'admin_page.php' thành URL trang admin của bạn
-        exit();
+            if ($attendanceId) {
+                if (isset($_POST['accept'])) {
+                    // Admin chọn Accept -> Cập nhật trạng thái thành 'Valid'
+                    $stmt = $conn->prepare("UPDATE CheckInOut SET status = 'Valid' WHERE Id = :id");
+                    if ($stmt->execute(['id' => $attendanceId])) {
+                        $_SESSION['successMessage'] = "Request has been accepted and marked as Valid.";
+                    } else {
+                        $_SESSION['errorMessage'] = "Failed to accept the request. Please try again.";
+                    }
+                } elseif (isset($_POST['reject'])) {
+                    // Admin chọn Reject -> Cập nhật trạng thái thành 'Invalid'
+                    $stmt = $conn->prepare("UPDATE CheckInOut SET status = 'Invalid' WHERE Id = :id");
+                    if ($stmt->execute(['id' => $attendanceId])) {
+                        $_SESSION['successMessage'] = "Request has been rejected and marked as Invalid.";
+                    } else {
+                        $_SESSION['errorMessage'] = "Failed to reject the request. Please try again.";
+                    }
+                }
+                // Reload the page to show the updated list
+                header("Location: attendance_request.php"); // Đổi 'admin_page.php' thành URL trang admin của bạn
+                exit();
     }
 }
 ?>
@@ -166,7 +166,7 @@ include "../config.php";
                         }
                         ?>
                         <form method="GET" action="">
-                            <label for="date">Chọn ngày:</label>
+                            <label for="date">Select date:</label>
                             <input type="date" name="date" value="<?php echo isset($_GET['date']) ? $_GET['date'] : date('Y-m-d'); ?>">
                             <button type="submit" class="btn btn-primary">Lọc</button>
                         </form>
@@ -183,8 +183,8 @@ include "../config.php";
                                                 <th>STT</th>
                                                 <th>User</th>
                                                 <th>Email</th>
-                                                <th>Phone Number</th>
-                                                <th>Department</th>
+                                                <!-- <th>Phone Number</th>
+                                                <th>Department</th> -->
                                                 <th>Reason</th>
                                                 <th>Status</th>
                                                 <th>Action Type</th> <!-- Cột mới cho loại hành động -->
@@ -197,8 +197,8 @@ include "../config.php";
                                                     <td><?= $index + 1 ?></td>
                                                     <td><?= htmlspecialchars($request['user']) ?></td>
                                                     <td><?= htmlspecialchars($request['Email']) ?></td>
-                                                    <td><?= htmlspecialchars($request['PhoneNumber']) ?></td>
-                                                    <td><?= htmlspecialchars($request['department']) ?></td>
+                                                    <!-- <td><?= htmlspecialchars($request['PhoneNumber']) ?></td>
+                                                    <td><?= htmlspecialchars($request['department']) ?></td> -->
                                                     <td><?= htmlspecialchars($request['reason']) ?></td>
                                                     <td class="<?= htmlspecialchars($request['status'] == 'Valid' ? 'status-valid' : ($request['status'] == 'Invalid' ? 'status-invalid' : 'status-pending')) ?>">
                                                         <?= htmlspecialchars($request['status']) ?>
