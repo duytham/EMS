@@ -46,6 +46,13 @@
             <span>Salary Levels</span>
         </a>
     </li>
+    
+    <li class="nav-item">
+        <a class="nav-link" href="./employee_salary_calculation.php">
+            <i class=""></i>
+            <span>Employee Salary Calculation</span>
+        </a>
+    </li>
 
     <!-- Divider -->
     <hr class="sidebar-divider d-none d-md-block">

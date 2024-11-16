@@ -21,12 +21,14 @@ $days_in_month = cal_days_in_month(CAL_GREGORIAN, $selected_month, $selected_yea
 
 <!DOCTYPE html>
 <html lang="vi">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Bảng tổng hợp điểm danh</title>
     <!-- Include Bootstrap hoặc CSS của bạn -->
 </head>
+
 <body>
     <h1>Bảng tổng hợp điểm danh phòng ban</h1>
 
@@ -102,4 +104,5 @@ $days_in_month = cal_days_in_month(CAL_GREGORIAN, $selected_month, $selected_yea
         </tbody>
     </table>
 </body>
+
 </html>

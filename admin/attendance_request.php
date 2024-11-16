@@ -2,84 +2,67 @@
 session_start();
 
 // Kết nối cơ sở dữ liệu
-include_once('../config.php');
+include('../config.php');
 
 // Lấy ngày từ GET
 $date = $_GET['date'] ?? date('Y-m-d');
+$statusFilter = $_GET['status'] ?? ''; // Lấy tham số status từ GET
 
 // Kết nối cơ sở dữ liệu và lấy danh sách yêu cầu từ bảng CheckInOut cho ngày đã chọn
 $stmt = $conn->prepare("
     SELECT c.Id, u.FullName AS user, u.Email, u.PhoneNumber, d.DepartmentName AS department, 
-           c.reason AS reason, c.status AS status, c.ActionType AS action_type
+        c.reason AS reason, c.status AS status, c.ActionType AS action_type
     FROM CheckInOut c
     JOIN User u ON c.UserID = u.Id
     JOIN Department d ON u.DepartmentID = d.Id
     WHERE DATE(c.LogDate) = :date
+    " . ($statusFilter ? "AND c.status = :status" : "") . " 
 ");
-$stmt->execute(['date' => $date]);
+
+// Bind parameters for status filter if set
+$params = ['date' => $date];
+if ($statusFilter) {
+    $params['status'] = $statusFilter;
+}
+
+$stmt->execute($params);
 $requests = $stmt->fetchAll();
 
-// // Xử lý yêu cầu từ admin - chỉ cho phép thay đổi 1 lần từ 'Pending' -> 'Valid' hoặc 'Invalid'
-// if ($_SERVER['REQUEST_METHOD'] == 'POST') {
-//     $attendanceId = $_POST['attendance_id'] ?? null;
+// Xử lý yêu cầu từ admin - cho phép thay đổi nhiều lần 
+if ($_SERVER['REQUEST_METHOD'] == 'POST') {
+    $attendanceId = $_POST['attendance_id'] ?? null;
 
-//     if ($attendanceId) {
-//         if (isset($_POST['accept'])) {
-//             // Admin chọn Accept -> cập nhật trạng thái thành 'Valid'
-//             $stmt = $conn->prepare("UPDATE CheckInOut SET status = 'Valid' WHERE Id = :id AND status = 'Pending'");
-//             if ($stmt->execute(['id' => $attendanceId])) {
-//                 $_SESSION['successMessage'] = "Request has been accepted and marked as Valid.";
-//             } else {
-//                 $_SESSION['errorMessage'] = "Failed to accept the request. Please try again.";
-//             }
-//         } elseif (isset($_POST['reject'])) {
-//             // Admin chọn Reject -> cập nhật trạng thái thành 'Invalid'
-//             $stmt = $conn->prepare("UPDATE CheckInOut SET status = 'Invalid' WHERE Id = :id AND status = 'Pending'");
-//             if ($stmt->execute(['id' => $attendanceId])) {
-//                 $_SESSION['successMessage'] = "Request has been rejected and marked as Invalid.";
-//             } else {
-//                 $_SESSION['errorMessage'] = "Failed to reject the request. Please try again.";
-//             }
-//         }
-
-        //Xử lý yêu cầu từ admin - cho phép thay đổi nhiều lần 
-        if ($_SERVER['REQUEST_METHOD'] == 'POST') {
-            $attendanceId = $_POST['attendance_id'] ?? null;
-
-            if ($attendanceId) {
-                if (isset($_POST['accept'])) {
-                    // Admin chọn Accept -> Cập nhật trạng thái thành 'Valid'
-                    $stmt = $conn->prepare("UPDATE CheckInOut SET status = 'Valid' WHERE Id = :id");
-                    if ($stmt->execute(['id' => $attendanceId])) {
-                        $_SESSION['successMessage'] = "Request has been accepted and marked as Valid.";
-                    } else {
-                        $_SESSION['errorMessage'] = "Failed to accept the request. Please try again.";
-                    }
-                } elseif (isset($_POST['reject'])) {
-                    // Admin chọn Reject -> Cập nhật trạng thái thành 'Invalid'
-                    $stmt = $conn->prepare("UPDATE CheckInOut SET status = 'Invalid' WHERE Id = :id");
-                    if ($stmt->execute(['id' => $attendanceId])) {
-                        $_SESSION['successMessage'] = "Request has been rejected and marked as Invalid.";
-                    } else {
-                        $_SESSION['errorMessage'] = "Failed to reject the request. Please try again.";
-                    }
-                }
-                // Reload the page to show the updated list
-                header("Location: attendance_request.php"); // Đổi 'admin_page.php' thành URL trang admin của bạn
-                exit();
+    if ($attendanceId) {
+        if (isset($_POST['accept'])) {
+            // Admin chọn Accept -> Cập nhật trạng thái thành 'Valid'
+            $stmt = $conn->prepare("UPDATE CheckInOut SET status = 'Valid' WHERE Id = :id");
+            if ($stmt->execute(['id' => $attendanceId])) {
+                $_SESSION['successMessage'] = "Request has been accepted and marked as Valid.";
+            } else {
+                $_SESSION['errorMessage'] = "Failed to accept the request. Please try again.";
+            }
+        } elseif (isset($_POST['reject'])) {
+            // Admin chọn Reject -> Cập nhật trạng thái thành 'Invalid'
+            $stmt = $conn->prepare("UPDATE CheckInOut SET status = 'Invalid' WHERE Id = :id");
+            if ($stmt->execute(['id' => $attendanceId])) {
+                $_SESSION['successMessage'] = "Request has been rejected and marked as Invalid.";
+            } else {
+                $_SESSION['errorMessage'] = "Failed to reject the request. Please try again.";
+            }
+        }
+        // Reload the page to show the updated list
+        header("Location: attendance_request.php"); // Đổi 'admin_page.php' thành URL trang admin của bạn
+        exit();
     }
 }
 ?>
 
 <!DOCTYPE html>
-<?php
-include "../config.php";
-?>
+<?php include "../config.php"; ?>
 
 <html lang="en">
 
 <head>
-
     <meta charset="utf-8">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
@@ -114,15 +97,13 @@ include "../config.php";
             /* Màu cho trạng thái 'Pending' */
         }
     </style>
+
     <!-- Custom fonts for this template-->
     <link href="../vendor/fontawesome-free/css/all.min.css" rel="stylesheet" type="text/css">
-    <link
-        href="https://fonts.googleapis.com/css?family=Nunito:200,200i,300,300i,400,400i,600,600i,700,700i,800,800i,900,900i"
-        rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css?family=Nunito:200,200i,300,300i,400,400i,600,600i,700,700i,800,800i,900,900i" rel="stylesheet">
 
     <!-- Custom styles for this template-->
     <link href="../css/sb-admin-2.min.css" rel="stylesheet">
-
 </head>
 
 <body id="page-top">
@@ -163,11 +144,20 @@ include "../config.php";
                         // Kiểm tra tham số status để hiển thị thông báo thành công
                         if (isset($_GET['status']) && $_GET['status'] == 'success') {
                             echo '<div class="alert alert-success">Department added successfully!</div>';
-                        }
-                        ?>
-                        <form method="GET" action="">
-                            <label for="date">Select date:</label>
+                        } ?>
+
+                        <form method="GET" action="attendance_request.php">
+                            <label for="date">Chọn date:</label>
                             <input type="date" name="date" value="<?php echo isset($_GET['date']) ? $_GET['date'] : date('Y-m-d'); ?>">
+                            
+                            <!-- Thêm trường lọc theo status -->
+                            <label for="status">Status:</label>
+                            <select name="status">
+                                <option value="">-- Select Status --</option>
+                                <option value="Valid" <?= (isset($_GET['status']) && $_GET['status'] == 'Valid') ? 'selected' : ''; ?>>Valid</option>
+                                <option value="Invalid" <?= (isset($_GET['status']) && $_GET['status'] == 'Invalid') ? 'selected' : ''; ?>>Invalid</option>
+                                <option value="Pending" <?= (isset($_GET['status']) && $_GET['status'] == 'Pending') ? 'selected' : ''; ?>>Pending</option>
+                            </select>
                             <button type="submit" class="btn btn-primary">Lọc</button>
                         </form>
 
@@ -175,6 +165,7 @@ include "../config.php";
                             <div class="card-header py-3">
                                 <h6 class="m-0 font-weight-bold text-primary">List of requests for date <?= date('d-m-Y', strtotime($date)) ?></h6>
                             </div>
+
                             <div class="card-body">
                                 <div class="table-responsive">
                                     <table class="table table-bordered" id="dataTable" width="100%" cellspacing="0">
@@ -183,8 +174,6 @@ include "../config.php";
                                                 <th>STT</th>
                                                 <th>User</th>
                                                 <th>Email</th>
-                                                <!-- <th>Phone Number</th>
-                                                <th>Department</th> -->
                                                 <th>Reason</th>
                                                 <th>Status</th>
                                                 <th>Action Type</th> <!-- Cột mới cho loại hành động -->
@@ -197,19 +186,18 @@ include "../config.php";
                                                     <td><?= $index + 1 ?></td>
                                                     <td><?= htmlspecialchars($request['user']) ?></td>
                                                     <td><?= htmlspecialchars($request['Email']) ?></td>
-                                                    <!-- <td><?= htmlspecialchars($request['PhoneNumber']) ?></td>
-                                                    <td><?= htmlspecialchars($request['department']) ?></td> -->
                                                     <td><?= htmlspecialchars($request['reason']) ?></td>
                                                     <td class="<?= htmlspecialchars($request['status'] == 'Valid' ? 'status-valid' : ($request['status'] == 'Invalid' ? 'status-invalid' : 'status-pending')) ?>">
                                                         <?= htmlspecialchars($request['status']) ?>
                                                     </td>
-                                                    <!-- Action Type Column -->
                                                     <td class="<?= $request['action_type'] == 'checkin' ? 'action-checkin' : 'action-checkout' ?>">
                                                         <?= $request['action_type'] == 'checkin' ? 'Check-in' : 'Check-out' ?>
                                                     </td>
                                                     <td>
-                                                        <button type="button" class="btn btn-success" onclick="confirmAction(<?= $request['Id'] ?>, 'accept', '<?= $request['status'] ?>')">Accept</button>
-                                                        <button type="button" class="btn btn-danger" onclick="confirmAction(<?= $request['Id'] ?>, 'reject', '<?= $request['status'] ?>')">Reject</button>
+                                                        <?php if ($request['status'] == 'Pending'): ?>
+                                                            <button type="button" class="btn btn-success" id="accept-<?= $request['Id'] ?>" onclick="confirmAction(<?= $request['Id'] ?>, 'accept', '<?= $request['status'] ?>')" data-status="<?= $request['status'] ?>">Accept</button>
+                                                            <button type="button" class="btn btn-danger" id="reject-<?= $request['Id'] ?>" onclick="confirmAction(<?= $request['Id'] ?>, 'reject', '<?= $request['status'] ?>')" data-status="<?= $request['status'] ?>">Reject</button>
+                                                        <?php endif; ?>
                                                     </td>
                                                 </tr>
                                             <?php endforeach; ?>
@@ -329,7 +317,6 @@ include "../config.php";
         <script src="../js/demo/chart-area-demo.js"></script>
         <script src="../js/demo/chart-area-demo.js"></script>
         <script src="../js/demo/datatables-demo.js"></script>
-
         <script>
             function showDeleteModal(employeeId) {
                 // Set the href attribute for confirmDeleteBtn with the employee ID
@@ -351,8 +338,8 @@ include "../config.php";
                 $('#statusConfirmModal').modal('show');
             }
         </script>
-
     </div>
+
     <script>
         let actionId, actionType;
 
@@ -377,12 +364,12 @@ include "../config.php";
         }
 
         document.getElementById('confirmActionBtn').addEventListener('click', function() {
-            // Create a form dynamically to submit the action
+            // Tạo một form động để gửi hành động
             const form = document.createElement('form');
             form.method = 'POST';
-            form.action = ''; // Current page
+            form.action = ''; // Trang hiện tại
 
-            // Add hidden inputs for attendance_id and action type
+            // Thêm các input ẩn cho attendance_id và action type
             const idInput = document.createElement('input');
             idInput.type = 'hidden';
             idInput.name = 'attendance_id';
@@ -395,12 +382,15 @@ include "../config.php";
             actionInput.value = true;
             form.appendChild(actionInput);
 
+            // Tìm các nút Accept và Reject và ẩn chúng
+            const buttons = document.querySelectorAll(`button[data-status='${actionType === 'accept' ? 'Pending' : 'Valid'}']`);
+            buttons.forEach(button => button.style.display = 'none');
+
             // Append form to body and submit
             document.body.appendChild(form);
             form.submit();
         });
     </script>
-
 </body>
 
 </html>

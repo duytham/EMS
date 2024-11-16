@@ -36,6 +36,7 @@ if (isset($_SESSION['errorMessage'])) {
     unset($_SESSION['errorMessage']); // Xóa thông báo sau khi đã hiển thị
 }
 
+
 try {
     // Chuẩn bị câu truy vấn
     $stmt = $conn->prepare($sql);
@@ -130,36 +131,6 @@ try {
                     ?>
                     <!-- DataTales Example -->
                     <div class="card shadow mb-4">
-                        <div class="card-header py-3 d-flex align-items-center">
-                            <div style="margin-bottom: 15px; flex-grow: 1;"> <!-- Thêm khoảng cách dưới đây -->
-                                <a href="add_employee.php" class="btn btn-primary btn-icon-split">
-                                    <span class="icon text-white-50"><i class="fas fa-plus"></i></span>
-                                    <span class="text">Add new employee</span>
-                                </a>
-                            </div>
-
-                            <form action="import_employees.php" method="post" enctype="multipart/form-data" class="form-inline mr-3">
-                                <label for="file" class="mr-2">Import: </label>
-                                <input type="file" name="employee_file" id="file" accept=".xlsx" class="form-control mr-2">
-                                <button type="submit" name="import" class="btn btn-success">Import</button>
-                            </form>
-
-                            <div class="d-flex align-items-center">
-                                <form action="download_template.php" method="post" class="d-inline">
-                                    <button type="submit" class="btn btn-secondary mx-1">
-                                        <span class="icon text-white-50"><i class="fas fa-file-download"></i></span>
-                                        Download Template
-                                    </button>
-                                </form>
-                                <form action="export_employees.php" method="post" class="d-inline">
-                                    <button type="submit" class="btn btn-info mx-1">
-                                        <span class="icon text-white-50"><i class="fas fa-file-export"></i></span>
-                                        Export Employees
-                                    </button>
-                                </form>
-                            </div>
-                        </div>
-
                         <div class="card-body">
                             <div class="table-responsive">
                                 <table class="table table-bordered" id="dataTable" width="100%" cellspacing="0">
@@ -172,7 +143,6 @@ try {
                                             <th>Department</th>
                                             <th>Status</th> <!-- Thêm cột Status -->
                                             <th>Action</th>
-                                            <th>Calculate Salary</th> <!-- Thêm cột Calculate Salary -->
                                         </tr>
                                     </thead>
 
@@ -209,10 +179,6 @@ try {
                                                             <a href="#" onclick="showStatusModal(<?= $employee['Id']; ?>, 'active')">Active</a>
                                                         <?php endif; ?>
                                                     </td>
-                                                    <td>
-                                                        <!-- Button to open "Tính lương" modal -->
-                                                        <button class="btn btn-primary" onclick="openSalaryModal(<?= $employee['Id'] ?>)">Tính lương</button>
-                                                    </td>
                                                 </tr>
                                             <?php endforeach; ?>
                                         <?php else: ?>
@@ -239,49 +205,6 @@ try {
         <a class="scroll-to-top rounded" href="#page-top">
             <i class="fas fa-angle-up"></i>
         </a>
-
-        <!-- Salary Calculation Modal -->
-        <div class="modal" id="salaryModal" tabindex="-1" role="dialog" aria-labelledby="salaryModalLabel" aria-hidden="true">
-            <div class="modal-dialog" role="document">
-                <div class="modal-content">
-                    <div class="modal-header">
-                        <h5 class="modal-title" id="salaryModalLabel">Tính Lương</h5>
-                        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
-                            <span aria-hidden="true">&times;</span>
-                        </button>
-                    </div>
-                    <div class="modal-body">
-                        <form id="salaryForm">
-                            <div class="form-group">
-                                <label for="employee">Nhân viên</label>
-                                <select class="form-control" id="employee" name="employee_id" required>
-                                    <?php foreach ($employees as $employee): ?>
-                                        <option value="<?= $employee['Id'] ?>"><?= htmlspecialchars($employee['FullName']) ?></option>
-                                    <?php endforeach; ?>
-                                </select>
-                            </div>
-                            <div class="form-group">
-                                <label for="salaryLevel">Hệ số lương</label>
-                                <input type="text" class="form-control" id="salaryLevel" readonly>
-                            </div>
-                            <div class="form-group">
-                                <label for="validDays">Số ngày công hợp lệ</label>
-                                <input type="number" class="form-control" id="validDays" readonly>
-                            </div>
-                            <div class="form-group">
-                                <label for="invalidDays">Số ngày công không hợp lệ</label>
-                                <input type="number" class="form-control" id="invalidDays" readonly>
-                            </div>
-                            <div class="form-group">
-                                <label for="salaryReceived">Lương nhận được</label>
-                                <input type="text" class="form-control" id="salaryReceived" readonly>
-                            </div>
-                            <button type="button" class="btn btn-success" onclick="saveSalary()">Lưu trữ tính lương</button>
-                        </form>
-                    </div>
-                </div>
-            </div>
-        </div>
 
         <!-- Logout Modal-->
         <div class="modal fade" id="logoutModal" tabindex="-1" role="dialog" aria-labelledby="exampleModalLabel"
@@ -380,42 +303,6 @@ try {
 
                 // Show the status confirmation modal
                 $('#statusConfirmModal').modal('show');
-            }
-        </script>
-
-        <script>
-            // Open the salary modal and populate fields
-            function openSalaryModal(employeeId) {
-                $.ajax({
-                    url: 'get_salary_details.php',
-                    method: 'GET',
-                    data: {
-                        employee_id: employeeId
-                    },
-                    success: function(response) {
-                        const data = JSON.parse(response);
-                        $('#employee').val(employeeId);
-                        $('#salaryLevel').val(data.salary_level);
-                        $('#validDays').val(data.valid_days);
-                        $('#invalidDays').val(data.invalid_days);
-                        $('#salaryReceived').val(data.salary);
-                        $('#salaryModal').modal('show');
-                    }
-                });
-            }
-
-            // Save salary details
-            function saveSalary() {
-                const formData = $('#salaryForm').serialize();
-                $.ajax({
-                    url: 'save_salary.php',
-                    method: 'POST',
-                    data: formData,
-                    success: function(response) {
-                        alert(response.message);
-                        $('#salaryModal').modal('hide');
-                    }
-                });
             }
         </script>
     </div>

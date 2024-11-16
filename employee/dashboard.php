@@ -113,7 +113,7 @@ if (isset($_POST['submit_reason'])) {
             // Trả về thông báo thành công
             echo "<br><div class='alert alert-success'>Reason has been successfully sent. Please wait for admin approval!</div>";
         } catch (PDOException $e) {
-            echo "<div class='alert alert-danger'>Error occur: " . $e->getMessage() . "</div>";
+            echo "<div class='alert alert-danger'>Error occurred: " . $e->getMessage() . "</div>";
         }
     } else {
         echo "<div class='alert alert-warning'>Please provide a complete reason.</div>";
@@ -465,7 +465,18 @@ include "../config.php";
                                 <div class="invalid-reason">
                                     <h5>Reason for Invalid Check-in/ Check-out:</h5>
                                     <form id="reasonForm">
-                                        <textarea name="reason" id="reason" class="form-control" rows="3" placeholder="Please provide the reason for invalid check-in/out" required></textarea>
+                                        <select id="reasonSelect" class="form-control" required>
+                                            <option value="">Select a reason</option>
+                                            <option value="Reason 1">Heavy traffic: Due to traffic jams or poor traffic conditions.</option>
+                                            <option value="Reason 2">Personal problems: Having an urgent matter to attend to (e.g. family issues).</option>
+                                            <option value="Reason 3">Illness: Due to poor health or illness.</option>
+                                            <option value="Reason 3">Doctor's appointment: Having an appointment that cannot be changed.</option>
+                                            <option value="Reason 3">Bad weather: Due to unfavorable weather (rainstorms, snow, etc.).</option>
+                                            <option value="Reason 3">Change in work schedule: There is an unexpected change in work schedule.</option>
+                                            <option value="Reason 3">Vehicle problems: Vehicle breaks down or is not usable.</option>
+                                            <option value="other">Other reason</option>
+                                        </select>
+                                        <textarea name="reason" id="reason" class="form-control mt-3" rows="3" placeholder="Please provide the reason for invalid check-in/out" style="display:none;"></textarea>
                                         <input type="hidden" name="attendance_id" id="attendance_id" value="<?php echo $attendanceLog['Id']; ?>">
                                         <button type="submit" class="btn btn-warning mt-3">Submit Reason</button>
                                     </form>
@@ -598,27 +609,55 @@ include "../config.php";
         <script src="../js/demo/chart-area-demo.js"></script>
         <script>
             document.getElementById('reasonForm').addEventListener('submit', function(e) {
-                e.preventDefault(); // Ngăn không cho form submit thông thường
+                e.preventDefault(); // Ngăn chặn việc gửi form mặc định
 
-                let reason = document.getElementById('reason').value;
+                let reasonSelect = document.getElementById('reasonSelect');
+                let reasonTextarea = document.getElementById('reason');
                 let attendanceId = document.getElementById('attendance_id').value;
 
-                let formData = new FormData();
-                formData.append('reason', reason);
-                formData.append('attendance_id', attendanceId);
-                formData.append('submit_reason', true); // Để xác định yêu cầu từ form
+                // Kiểm tra xem lý do đã chọn có phải là 'other' hay không
+                let reason;
+                if (reasonSelect.value === 'other') {
+                    reason = reasonTextarea.value; // Lấy giá trị từ textarea nếu chọn "Other"
+                } else {
+                    reason = reasonSelect.options[reasonSelect.selectedIndex].text; // Lấy nội dung mô tả từ combobox
+                }
 
-                // Gửi dữ liệu AJAX
-                fetch('dashboard.php', {
-                        method: 'POST',
-                        body: formData
-                    })
-                    .then(response => response.text())
-                    .then(data => {
-                        // Hiển thị thông báo thành công hoặc lỗi
-                        document.getElementById('responseMessage').innerHTML = data;
-                    })
-                    .catch(error => console.error('Error:', error));
+                if (attendanceId && (reasonSelect.value !== '' && (reasonSelect.value !== 'other' || reason))) {
+                    let formData = new FormData();
+                    formData.append('reason', reason);
+                    formData.append('attendance_id', attendanceId);
+                    formData.append('submit_reason', true); // Đánh dấu yêu cầu là một lần gửi form
+
+                    // Gửi dữ liệu bằng AJAX
+                    fetch('dashboard.php', {
+                            method: 'POST',
+                            body: formData
+                        })
+                        .then(response => response.text())
+                        .then(data => {
+                            // Hiển thị thông báo phản hồi
+                            document.getElementById('responseMessage').innerHTML = data;
+                        })
+                        .catch(error => console.error('Lỗi:', error));
+                } else {
+                    alert('Vui lòng chọn một lý do.');
+                }
+            });
+        </script>
+
+        <script>
+            document.getElementById('reasonSelect').addEventListener('change', function() {
+                var selectedValue = this.value;
+                var reasonTextarea = document.getElementById('reason');
+                if (selectedValue === 'other') {
+                    reasonTextarea.style.display = 'block';
+                    reasonTextarea.required = true; // Make it required if 'other' is selected
+                } else {
+                    reasonTextarea.style.display = 'none';
+                    reasonTextarea.required = false; // Not required for other options
+                    reasonTextarea.value = ''; // Clear the textarea if another option is selected
+                }
             });
         </script>
 </body>

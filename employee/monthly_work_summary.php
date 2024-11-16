@@ -41,6 +41,26 @@ $stmt->bindParam(':selectedMonth', $selectedMonth, PDO::PARAM_INT);
 $stmt->bindParam(':selectedYear', $selectedYear, PDO::PARAM_INT);
 $stmt->execute();
 $workDetails = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+// Câu truy vấn để lấy danh sách ngày đã điền giải trình
+$queryJustifications = "SELECT 
+                            LogDate, 
+                            ActionType, 
+                            Reason, 
+                            Status 
+                        FROM CheckInOut
+                        WHERE UserID = :userId 
+                          AND MONTH(LogDate) = :selectedMonth 
+                          AND YEAR(LogDate) = :selectedYear 
+                          AND Reason IS NOT NULL 
+                        ORDER BY LogDate DESC";
+
+$stmt = $conn->prepare($queryJustifications);
+$stmt->bindParam(':userId', $userId, PDO::PARAM_INT);
+$stmt->bindParam(':selectedMonth', $selectedMonth, PDO::PARAM_INT);
+$stmt->bindParam(':selectedYear', $selectedYear, PDO::PARAM_INT);
+$stmt->execute();
+$justifications = $stmt->fetchAll(PDO::FETCH_ASSOC);
 ?>
 
 
@@ -127,6 +147,18 @@ include "../config.php";
             font-size: 1.5rem;
             margin-right: 5px;
         }
+
+        .badge-checkin {
+            background-color: #007bff;
+            /* Màu xanh dương */
+            color: #fff;
+        }
+
+        .badge-checkout {
+            background-color: #6c757d;
+            /* Màu xám */
+            color: #fff;
+        }
     </style>
 </head>
 
@@ -197,7 +229,6 @@ include "../config.php";
                                     foreach ($workDetails as $row):
                                         if ($currentDate !== $row['WorkDate']) {
                                             if ($currentDate !== '') {
-                                                echo "<tr><td colspan='3' class='text-end total-duration'>Daily Total</td><td class='total-duration'>" . gmdate("H:i:s", $dailyTotalDuration) . "</td></tr>";
                                                 $monthlyTotalDuration += $dailyTotalDuration;
                                                 $workDays++;
                                             }
@@ -214,8 +245,8 @@ include "../config.php";
                                         </tr>
                                     <?php endforeach; ?>
                                     <tr>
-                                        <td colspan='3' class='text-end total-duration'>Daily Total</td>
-                                        <td class='total-duration'><?= gmdate("H:i:s", $dailyTotalDuration) ?></td>
+                                        <td colspan="3" class="text-end total-duration">Monthly Total</td>
+                                        <td class="total-duration"><?= gmdate("H:i:s", $monthlyTotalDuration) ?></td>
                                     </tr>
                                     <?php
                                     $monthlyTotalDuration += $dailyTotalDuration;
@@ -230,17 +261,62 @@ include "../config.php";
                         </table>
                     </div>
 
-                    <!-- Motivational Message Based on Total Work Hours -->
-                    <?php
-                    $monthlyHours = $monthlyTotalDuration / 3600;
-                    if ($monthlyHours >= 160) {
-                        echo "<div class='motivational-message good-job'><i class='icon fas fa-thumbs-up'></i> Great job! Keep up the hard work!</div>";
-                    } elseif ($monthlyHours > 0) {
-                        echo "<div class='motivational-message needs-improvement'><i class='icon fas fa-frown'></i> Keep pushing! More dedication could help improve your results.</div>";
-                    } else {
-                        echo "<div class='motivational-message needs-improvement'><i class='icon fas fa-coffee'></i> No work records found. Let's start being more productive!</div>";
-                    }
-                    ?>
+                    <!-- Bảng danh sách giải trình -->
+                    <h1 class="text-center">Justification Requests</h1>
+
+                    <div class="table-responsive">
+                        <table class="table table-bordered">
+                            <thead>
+                                <tr>
+                                    <th>Date</th>
+                                    <th>Action</th>
+                                    <th>Reason</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <?php if (!empty($justifications)): ?>
+                                    <?php foreach ($justifications as $row): ?>
+                                        <tr>
+                                            <td><?= date('d/m/Y', strtotime($row['LogDate'])) ?></td>
+                                            <td>
+                                                <?php
+                                                $actionType = $row['ActionType'];
+                                                $formattedAction = $actionType === 'checkin' ? 'Check-in' : 'Check-out';
+
+                                                // Áp dụng màu sắc dựa trên loại hành động
+                                                if ($actionType === 'checkin') {
+                                                    echo "<span class='text-primary'>$formattedAction</span>";
+                                                } elseif ($actionType === 'checkout') {
+                                                    echo "<span class='text-secondary'>$formattedAction</span>";
+                                                }
+                                                ?>
+                                            </td>
+                                            <td><?= $row['Reason'] ?></td>
+                                            <td>
+                                                <?php
+                                                switch ($row['Status']) {
+                                                    case 'Valid':
+                                                        echo "<span class='badge bg-success'>Valid</span>";
+                                                        break;
+                                                    case 'Invalid':
+                                                        echo "<span class='badge bg-danger'>Invalid</span>";
+                                                        break;
+                                                    default:
+                                                        echo "<span class='badge bg-warning'>Pending</span>";
+                                                }
+                                                ?>
+                                            </td>
+                                        </tr>
+                                    <?php endforeach; ?>
+                                <?php else: ?>
+                                    <tr>
+                                        <td colspan="4" class="text-center">No justifications found for this month.</td>
+                                    </tr>
+                                <?php endif; ?>
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
                 <!-- /.container-fluid -->
             </div>
