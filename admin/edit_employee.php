@@ -193,15 +193,15 @@ $departments = $conn->query("SELECT * FROM `Department`")->fetchAll(PDO::FETCH_A
                         <!-- Add this inside the employee edit form -->
                         
                         <div class="form-group">
-                            <label for="salary_level">Salary Level:</label>
-                            <select class="form-control" id="salary_level" name="salary_level" required>
-                                <?php foreach ($salary_levels as $level): ?>
-                                    <option value="<?= $level['id'] ?>" <?= $level['id'] == $user['salary_level_id'] ? 'selected' : '' ?>>
-                                        Level <?= $level['level'] ?> - Monthly: <?= number_format($level['monthly_salary'], 0, ',', '.') ?> VND, Daily: <?= number_format($level['daily_salary'], 0, ',', '.') ?> VND
-                                    </option>
-                                <?php endforeach; ?>
-                            </select>
-                        </div>
+    <label for="salary_level">Salary Level:</label>
+    <select class="form-control" id="salary_level" name="salary_level" required>
+        <?php foreach ($salary_levels as $level): ?>
+            <option value="<?= $level['id'] ?>" <?= $level['id'] == $user['salary_level_id'] ? 'selected' : '' ?>>
+                Level <?= $level['level'] ?> - <?= htmlspecialchars($level['alias']) ?> - Monthly: <?= number_format($level['monthly_salary'], 0, ',', '.') ?> VND - Daily: <?= number_format($level['daily_salary'], 0, ',', '.') ?> VND
+            </option>
+        <?php endforeach; ?>
+    </select>
+</div>
                         <button type="submit" class="btn btn-primary">Update Employee</button>
                     </form>
                 </div>

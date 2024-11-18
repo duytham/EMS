@@ -1,115 +1,297 @@
 <?php
-session_start(); // Bắt đầu phiên
-require_once '../config.php';  // Sử dụng file config.php với PDO
-require '../vendor/autoload.php';
+session_start();
+// Include file cấu hình kết nối
+require_once '../config.php'; // Đường dẫn đến file config của bạn
 
+// Khởi tạo biến $errorMessage với giá trị mặc định
+$errorMessage = '';
 
-// Câu SQL để lấy danh sách nhân viên (trừ admin), bao gồm tên phòng ban
-$sql = "
-    SELECT u.Id, u.FullName, u.Email, u.PhoneNumber, d.DepartmentName, u.Status 
-    FROM `User` u 
-    LEFT JOIN `Department` d ON u.DepartmentID = d.id 
-    WHERE u.RoleID != 1 and u.RoleID != 3
-";
+// Admin đang đăng nhập (thay đổi cho phù hợp với session của bạn)
+$currentAdminId = 9; // ID của admin
 
-// Lấy thông tin chi tiết về user và phòng ban (only role employee)
-$sql = "
-    SELECT u.Id, u.FullName, u.Email, u.PhoneNumber, 
-           d.DepartmentName AS ChildDepartment, 
-           pd.DepartmentName AS ParentDepartment, 
-           u.Status 
-    FROM `User` u 
-    LEFT JOIN `Department` d ON u.DepartmentID = d.id 
-    LEFT JOIN `Department` pd ON d.ParentDepartmentID = pd.id 
-    WHERE u.RoleID != 1 and u.RoleID != 3
-";
+// Khởi tạo mảng để chứa dữ liệu lương
+$employees = [];
 
-// Kiểm tra thông báo thành công và lưu nó vào biến
-if (isset($_SESSION['successMessage'])) {
-    $successMessage = $_SESSION['successMessage'];
-    unset($_SESSION['successMessage']); // Xóa thông báo sau khi đã hiển thị
+// Hàm đệ quy để SHOW cây phòng ban 
+function renderDepartmentTree($departments)
+{
+    echo '<ul>';
+    foreach ($departments as $department) {
+        echo '<li>';
+        echo '<input type="checkbox" name="departments[]" value="' . $department['id'] . '"> ' . htmlspecialchars($department['DepartmentName']);
+        if (!empty($department['children'])) {
+            renderDepartmentTree($department['children']);
+        }
+        echo '</li>';
+    }
+    echo '</ul>';
 }
 
-// Cũng có thể kiểm tra thông báo lỗi tương tự
-if (isset($_SESSION['errorMessage'])) {
-    $errorMessage = $_SESSION['errorMessage'];
-    unset($_SESSION['errorMessage']); // Xóa thông báo sau khi đã hiển thị
+// Hàm đệ quy để GET cây phòng ban
+function getDepartments($parentId = 0)
+{
+    global $conn;
+    $sql = "SELECT id, DepartmentName, ParentDepartmentID FROM department WHERE ParentDepartmentID = :parentId";
+    $stmt = $conn->prepare($sql);
+    $stmt->execute([':parentId' => $parentId]);
+    $departments = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    $result = [];
+    foreach ($departments as $department) {
+        $children = getDepartments($department['id']);
+        $department['children'] = $children;
+        $result[] = $department;
+    }
+    return $result;
 }
 
+$departmentsTree = getDepartments(); // Gọi hàm để lấy cây phòng ban
+
+if (isset($_POST['filter'])) {
+    $selectedDepartments = $_POST['departments'] ?? [];
+    // Thực hiện truy vấn để lấy nhân viên theo phòng ban đã chọn
+    $departmentCondition = '';
+    if (!empty($selectedDepartments)) {
+        $departmentCondition = 'WHERE u.DepartmentID IN (' . implode(',', array_map('intval', $selectedDepartments)) . ')';
+    }
+
+    $sql = "
+        SELECT 
+            u.Id AS employee_id,
+            u.FullName,
+            CONCAT(d.DepartmentName, ' - ', COALESCE(pd.DepartmentName, '')) AS Department,
+            sl.alias AS SalaryLevel,
+            sl.monthly_salary,
+            sl.daily_salary,
+            -- Các trường khác...
+        FROM 
+            user u
+        LEFT JOIN 
+            department d ON u.DepartmentID = d.id
+        LEFT JOIN 
+            department pd ON d.ParentDepartmentID = pd.id
+        LEFT JOIN 
+            salary_levels sl ON u.salary_level_id = sl.id
+        LEFT JOIN 
+            checkinout c ON u.Id = c.UserID
+        $departmentCondition
+        GROUP BY 
+            u.Id;
+    ";
+
+    // Tiếp tục thực hiện truy vấn như trước
+    $stmt = $conn->prepare($sql);
+    $stmt->execute();
+    $employees = $stmt->fetchAll(PDO::FETCH_ASSOC);
+}
 
 try {
-    // Chuẩn bị câu truy vấn
+    // Truy vấn tính valid_days, invalid_days, và tính lương
+    $sql = "
+        SELECT 
+            u.Id AS employee_id,
+            u.FullName,
+            CONCAT(d.DepartmentName, ' - ', COALESCE(pd.DepartmentName, '')) AS Department,
+            sl.alias AS SalaryLevel,
+            sl.monthly_salary,
+            sl.daily_salary,
+            -- Tính valid_days
+            COUNT(DISTINCT CASE 
+                WHEN (c.ActionType = 'checkin' AND TIME(c.CheckInTime) <= '08:00:00') 
+                OR (c.ActionType = 'checkout' AND TIME(c.CheckOutTime) >= '17:00:00') 
+                OR c.status = 'valid' 
+                THEN c.LogDate 
+            END) AS valid_days,
+
+            -- Tính invalid_days (Check-in muộn hoặc check-out sớm)
+            COUNT(DISTINCT CASE 
+                WHEN (c.ActionType = 'checkin' AND TIME(c.CheckInTime) > '08:00:00') 
+                OR (c.ActionType = 'checkout' AND TIME(c.CheckOutTime) < '17:00:00') 
+                THEN c.LogDate 
+            END) AS invalid_days,
+
+            -- Tổng số ngày làm việc trong tháng (không phân biệt valid và invalid)
+            COUNT(DISTINCT c.LogDate) AS total_work_days, 
+
+            -- Tổng lương tính theo tháng
+            ROUND(
+                (
+                    COUNT(DISTINCT CASE 
+                        WHEN (c.ActionType = 'checkin' AND TIME(c.CheckInTime) <= '08:00:00') 
+                        OR (c.ActionType = 'checkout' AND TIME(c.CheckOutTime) >= '17:00:00') 
+                        OR c.status = 'valid' 
+                        THEN c.LogDate 
+                    END)
+                    + 0.5 * COUNT(DISTINCT CASE 
+                        WHEN c.status = 'rejected' THEN c.LogDate 
+                    END)
+                ) / 22 * sl.monthly_salary,
+                2
+            ) AS total_monthly_salary,
+
+            -- Tổng lương tính theo ngày
+            ROUND(
+                (
+                    COUNT(DISTINCT CASE 
+                        WHEN (c.ActionType = 'checkin' AND TIME(c.CheckInTime) <= '08:00:00') 
+                        OR (c.ActionType = 'checkout' AND TIME(c.CheckOutTime) >= '17:00:00') 
+                        OR c.status = 'valid' 
+                        THEN c.LogDate 
+                    END)
+                    + 0.5 * COUNT(DISTINCT CASE 
+                        WHEN c.status = 'rejected' THEN c.LogDate 
+                    END)
+                ) * sl.daily_salary,
+                2
+            ) AS total_daily_salary
+        FROM 
+            user u
+        LEFT JOIN 
+            department d ON u.DepartmentID = d.id
+        LEFT JOIN 
+            department pd ON d.ParentDepartmentID = pd.id
+        LEFT JOIN 
+            salary_levels sl ON u.salary_level_id = sl.id
+        LEFT JOIN 
+            checkinout c ON u.Id = c.UserID
+        WHERE 
+            u.RoleID = 2 
+        GROUP BY 
+            u.Id;
+    ";
+
+    // Chuẩn bị và thực thi truy vấn
     $stmt = $conn->prepare($sql);
-
-    // Thực thi truy vấn
     $stmt->execute();
+    $employees = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-    // Lấy tất cả kết quả
-    $employees = $stmt->fetchAll(PDO::FETCH_ASSOC); // PDO sử dụng fetchAll()
+    // Kiểm tra thông báo thành công và lưu nó vào biến
+    if (isset($_SESSION['successMessage'])) {
+        $successMessage = $_SESSION['successMessage'];
+        unset($_SESSION['successMessage']); // Xóa thông báo sau khi đã hiển thị
+    }
 
-    // Kiểm tra nếu có kết quả
-    if (count($employees) > 0) {
-        foreach ($employees as $employee) {
-            //echo "ID: " . $employee["Id"] . " - Tên: " . htmlspecialchars($employee["FullName"]) . " - Email: " . htmlspecialchars($employee["Email"]) . "<br>";
+    // Cũng có thể kiểm tra thông báo lỗi tương tự
+    if (isset($_SESSION['errorMessage'])) {
+        $errorMessage = $_SESSION['errorMessage'];
+        unset($_SESSION['errorMessage']); // Xóa thông báo sau khi đã hiển thị
+    }
+
+    // Xử lý lưu trữ tính lương khi nút được nhấn
+    if (isset($_POST['save_salary'])) {
+        try {
+            // Kiểm tra xem bản ghi đã tồn tại chưa
+            $check_stmt = $conn->prepare("
+                SELECT COUNT(*) FROM salary_logs 
+                WHERE month = :month AND year = :year AND employee_id = :employee_id
+            ");
+
+            // Cập nhật thông tin lương nếu bản ghi đã tồn tại
+            $update_stmt = $conn->prepare("
+                UPDATE salary_logs 
+                SET valid_days = :valid_days, invalid_days = :invalid_days, salary = :salary, processed_by = :processed_by 
+                WHERE month = :month AND year = :year AND employee_id = :employee_id
+            ");
+
+            // Thêm mới bản ghi nếu chưa tồn tại
+            $insert_stmt = $conn->prepare("
+                INSERT INTO salary_logs (employee_id, valid_days, invalid_days, month, year, salary, processed_by)
+                VALUES (:employee_id, :valid_days, :invalid_days, :month, :year, :salary, :processed_by)
+            ");
+
+            // Thực hiện vòng lặp xử lý dữ liệu
+            foreach ($employees as $employee) {
+                // Kiểm tra xem bản ghi đã tồn tại chưa
+                $check_stmt->execute([
+                    ':month' => date('m'),
+                    ':year' => date('Y'),
+                    ':employee_id' => $employee['employee_id']
+                ]);
+
+                $exists = $check_stmt->fetchColumn();
+
+                if ($exists > 0) {
+                    // Nếu bản ghi đã tồn tại, cập nhật thông tin
+                    $update_stmt->execute([
+                        ':employee_id' => $employee['employee_id'],
+                        ':valid_days' => $employee['valid_days'],
+                        ':invalid_days' => $employee['invalid_days'],
+                        ':month' => date('m'),
+                        ':year' => date('Y'),
+                        ':salary' => $employee['total_monthly_salary'],
+                        ':processed_by' => $currentAdminId
+                    ]);
+
+                    if ($update_stmt->rowCount() > 0) {
+                        echo "Updated salary record for employee ID: " . $employee['employee_id'] . "<br>";
+                    }
+                } else {
+                    // Nếu bản ghi chưa tồn tại, chèn bản ghi mới
+                    $insert_stmt->execute([
+                        ':employee_id' => $employee['employee_id'],
+                        ':valid_days' => $employee['valid_days'],
+                        ':invalid_days' => $employee['invalid_days'],
+                        ':month' => date('m'),
+                        ':year' => date('Y'),
+                        ':salary' => $employee['total_monthly_salary'],
+                        ':processed_by' => $currentAdminId
+                    ]);
+
+                    // Kiểm tra xem có bản ghi được cập nhật không
+                    if ($update_stmt->rowCount() > 0) {
+                        echo "Updated salary record for employee ID: " . $employee['employee_id'] . "<br>";
+                    } else {
+                        echo "No record updated for employee ID: " . $employee['employee_id'] . "<br>";
+                    }
+
+                    // Kiểm tra xem có bản ghi được chèn không
+                    if ($insert_stmt->rowCount() > 0) {
+                        echo "Inserted new salary record for employee ID: " . $employee['employee_id'] . "<br>";
+                    } else {
+                        echo "Failed to insert salary record for employee ID: " . $employee['employee_id'] . "<br>";
+                    }
+                }
+            }
+
+            $successMessage = "Salary records saved successfully!";
+            // if ($stmt->errorCode() != '00000') {
+            //     print_r($stmt->errorInfo());
+            // }
+        } catch (PDOException $e) {
+            echo "Error: " . $e->getMessage();
         }
-    } else {
-        echo "Không có nhân viên nào.";
     }
 } catch (PDOException $e) {
-    echo "Lỗi: " . $e->getMessage();
+    echo "Error: " . $e->getMessage();
 }
 ?>
 
-<!DOCTYPE html>
-<?php include "../config.php"; ?>
 
+<!DOCTYPE html>
 <html lang="en">
 
 <head>
-
     <meta charset="utf-8">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
     <meta name="description" content="">
     <meta name="author" content="">
 
-    <title>Admin - EDMS - Manage Employees</title>
+    <title>Admin - EDMS - Employee's Salary</title>
 
-    <!-- Custom fonts for this template-->
     <link href="../vendor/fontawesome-free/css/all.min.css" rel="stylesheet" type="text/css">
-    <link
-        href="https://fonts.googleapis.com/css?family=Nunito:200,200i,300,300i,400,400i,600,600i,700,700i,800,800i,900,900i"
-        rel="stylesheet">
-
-    <!-- Custom styles for this template-->
+    <link href="https://fonts.googleapis.com/css?family=Nunito:200,200i,300,300i,400,400i,600,600i,700,700i,800,800i,900,900i" rel="stylesheet">
     <link href="../css/sb-admin-2.min.css" rel="stylesheet">
-
 </head>
 
 <body id="page-top">
-
-    <!-- Page Wrapper -->
     <div id="wrapper">
-
-        <!-- Sidebar -->
         <?php include('../admin/sidebar.php') ?>
-
-        <!-- Content Wrapper -->
         <div id="content-wrapper" class="d-flex flex-column">
-
-            <!-- Main Content -->
             <div id="content">
-
                 <?php include('../templates/navbar.php') ?>
 
-                <!-- <?php include('../') ?> -->
-
-                <!-- Begin Page Content -->
                 <div class="container-fluid">
-
-                    <!-- Page Heading -->
-                    <h1 class="h3 mb-2 text-gray-800">Employee List</h1>
-                    <p class="mb-4">Displays the list of employees of departments, along with adding employees, downloading the employee list, and editing or disabling that employee..</p>
 
                     <?php if (isset($successMessage)): ?>
                         <div class="alert alert-success"><?= htmlspecialchars($successMessage) ?></div>
@@ -129,79 +311,76 @@ try {
                         echo "<div class='alert alert-danger'>$errorMessage</div>";
                     }
                     ?>
-                    <!-- DataTales Example -->
-                    <div class="card shadow mb-4">
-                        <div class="card-body">
-                            <div class="table-responsive">
-                                <table class="table table-bordered" id="dataTable" width="100%" cellspacing="0">
-                                    <thead>
-                                        <tr>
-                                            <th>ID</th>
-                                            <th>Full name</th>
-                                            <th>Email</th>
-                                            <th>Phone number</th>
-                                            <th>Department</th>
-                                            <th>Status</th> <!-- Thêm cột Status -->
-                                            <th>Action</th>
-                                        </tr>
-                                    </thead>
 
-                                    <tbody>
-                                        <?php if (count($employees) > 0): ?>
-                                            <?php foreach ($employees as $employee): ?>
+                    <body>
+                        <h1 class="h3 mb-2 text-gray-800">Employee Salary Calculation</h1>
+                        <p class="mb-4">Displays the list of employees of departments, along with each employee's salary</p>
+
+                        <?php if (isset($statusMessage)): ?>
+                            <p><?= $statusMessage ?></p>
+                        <?php endif; ?>
+
+
+                        <form method="POST" action="">
+                            <button type="submit" name="calculate_salary" class="btn btn-warning mr-2">
+                                <i class="fas fa-sync-alt"></i> Recalculate
+                            </button>
+                            <button type="submit" name="save_salary" class="btn btn-success">
+                                <i class="fas fa-save"></i> Save
+                            </button> <!-- Nút lưu trữ tính lương -->
+                        </form>
+
+                        <form method="POST" action="">
+                            <h3>Lọc theo phòng ban</h3>
+                            <?php renderDepartmentTree($departmentsTree); ?>
+                            <button type="submit" name="filter" class="btn btn-primary">Lọc</button>
+                        </form>
+
+                        <div class="card shadow mb-4">
+                            <div class="card-header py-3">
+                                <h6 class="m-0 font-weight-bold text-primary">Employee Salary Calculation</h6>
+                                <div class="card-body">
+                                    <div class="table-responsive">
+                                        <table class="table table-bordered" id="dataTable" width="100%" cellspacing="0">
+                                            <thead>
                                                 <tr>
-                                                    <td><?= htmlspecialchars($employee['Id']); ?></td>
-                                                    <td><?= htmlspecialchars($employee['FullName']); ?></td>
-                                                    <td><?= htmlspecialchars($employee['Email']); ?></td>
-                                                    <td><?= htmlspecialchars($employee['PhoneNumber']); ?></td>
-                                                    <td>
-                                                        <?php
-                                                        if (!empty($employee['ParentDepartment'])) {
-                                                            echo htmlspecialchars($employee['ParentDepartment']) . ' - ' . htmlspecialchars($employee['ChildDepartment']);
-                                                        } else {
-                                                            echo htmlspecialchars($employee['ChildDepartment']); // If no parent department, just show the child
-                                                        }
-                                                        ?>
-                                                    </td>
-
-                                                    <td>
-                                                        <?php if ($employee['Status'] == 'active'): ?>
-                                                            <span style="color: green;">Active</span>
-                                                        <?php else: ?>
-                                                            <span style="color: red;">Inactive</span>
-                                                        <?php endif; ?>
-                                                    </td>
-                                                    <td>
-                                                        <a href="edit_employee.php?id=<?= $employee['Id']; ?>">Edit</a> |
-                                                        <?php if ($employee['Status'] == 'active'): ?>
-                                                            <a href="#" onclick="showStatusModal(<?= $employee['Id']; ?>, 'inactive')">Inactive</a>
-                                                        <?php else: ?>
-                                                            <a href="#" onclick="showStatusModal(<?= $employee['Id']; ?>, 'active')">Active</a>
-                                                        <?php endif; ?>
-                                                    </td>
+                                                    <th>ID</th>
+                                                    <th>Full Name</th>
+                                                    <th>Department</th>
+                                                    <th>Salary Level</th>
+                                                    <th>Total Work Days</th> <!-- Thêm cột mới -->
+                                                    <th>Valid Days</th>
+                                                    <th>Invaild Days</th>
+                                                    <th>Total Monthly Salary</th>
+                                                    <th>Total Daily Salary</th>
                                                 </tr>
-                                            <?php endforeach; ?>
-                                        <?php else: ?>
-                                            <tr>
-                                                <td colspan="7">There's no data in list</td>
-                                            </tr>
-                                        <?php endif; ?>
-                                    </tbody>
-                                </table>
+                                            </thead>
+
+                                            <tbody>
+                                                <?php foreach ($employees as $employee): ?>
+                                                    <tr>
+                                                        <td><?= $employee['employee_id'] ?></td>
+                                                        <td><?= $employee['FullName'] ?></td>
+                                                        <td><?= $employee['Department'] ?></td>
+                                                        <td><?= $employee['SalaryLevel'] ?></td>
+                                                        <td><?= $employee['total_work_days'] ?></td>
+                                                        <td><?= $employee['valid_days'] ?></td>
+                                                        <td><?= $employee['invalid_days'] ?></td>
+                                                        <td><?= number_format($employee['total_monthly_salary'], 0, ',', '.') . ' đ' ?></td> <!-- Định dạng lương tháng -->
+                                                        <td><?= number_format($employee['total_daily_salary'], 0, ',', '.') . ' đ' ?></td> <!-- Định dạng lương ngày -->
+                                                    </tr>
+                                                <?php endforeach; ?>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
                             </div>
                         </div>
-                    </div>
+                    </body>
                 </div>
-                <!-- End of Content Wrapper -->
-
                 <?php include('../templates/footer.php') ?>
             </div>
-            <!-- End of Content Wrapper -->
-
         </div>
-        <!-- End of Page Wrapper -->
-
-        <!-- Scroll to Top Button-->
         <a class="scroll-to-top rounded" href="#page-top">
             <i class="fas fa-angle-up"></i>
         </a>
@@ -226,44 +405,6 @@ try {
             </div>
         </div>
 
-        <!-- Confirm Delete Modal -->
-        <div class="modal fade" id="deleteConfirmModal" tabindex="-1" role="dialog" aria-labelledby="deleteModalLabel" aria-hidden="true">
-            <div class="modal-dialog" role="document">
-                <div class="modal-content">
-                    <div class="modal-header">
-                        <h5 class="modal-title" id="deleteModalLabel">Confirm Inactivation</h5>
-                        <button class="close" type="button" data-dismiss="modal" aria-label="Close">
-                            <span aria-hidden="true">×</span>
-                        </button>
-                    </div>
-                    <div class="modal-body">Are you sure you want to inactive this employee?</div>
-                    <div class="modal-footer">
-                        <button class="btn btn-secondary" type="button" data-dismiss="modal">Cancel</button>
-                        <a class="btn btn-danger" id="confirmDeleteBtn" href="#">Inactive</a>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Confirm Status Change Modal -->
-        <div class="modal fade" id="statusConfirmModal" tabindex="-1" role="dialog" aria-labelledby="statusModalLabel" aria-hidden="true">
-            <div class="modal-dialog" role="document">
-                <div class="modal-content">
-                    <div class="modal-header">
-                        <h5 class="modal-title" id="statusModalLabel">Confirm Status Change</h5>
-                        <button class="close" type="button" data-dismiss="modal" aria-label="Close">
-                            <span aria-hidden="true">×</span>
-                        </button>
-                    </div>
-                    <div class="modal-body">Are you sure you want to change the status of this employee?</div>
-                    <div class="modal-footer">
-                        <button class="btn btn-secondary" type="button" data-dismiss="modal">Cancel</button>
-                        <a class="btn btn-primary" id="confirmStatusBtn" href="#">Change Status</a>
-                    </div>
-                </div>
-            </div>
-        </div>
-
         <!-- Bootstrap core JavaScript-->
         <script src="../vendor/jquery/jquery.min.js"></script>
         <script src="../vendor/bootstrap/js/bootstrap.bundle.min.js"></script>
@@ -283,17 +424,6 @@ try {
         <script src="../js/demo/chart-area-demo.js"></script>
         <script src="../js/demo/chart-area-demo.js"></script>
         <script src="../js/demo/datatables-demo.js"></script>
-
-        <script>
-            function showDeleteModal(employeeId) {
-                // Set the href attribute for confirmDeleteBtn with the employee ID
-                const confirmDeleteBtn = document.getElementById('confirmDeleteBtn');
-                confirmDeleteBtn.href = 'delete_employee.php?id=' + employeeId;
-
-                // Show the delete confirmation modal
-                $('#deleteConfirmModal').modal('show');
-            }
-        </script>
 
         <script>
             function showStatusModal(departmentId, newStatus) {

@@ -1,0 +1,61 @@
+<?php
+require_once '../config.php';
+
+if (isset($_GET['employee_id']) && isset($_GET['month']) && isset($_GET['year'])) {
+    $employeeId = $_GET['employee_id'];
+    $month = $_GET['month'];
+    $year = $_GET['year'];
+
+    $sql = "
+        SELECT 
+            u.Id AS EmployeeID, 
+            u.FullName, 
+            COUNT(CASE WHEN c.status = 'Valid' THEN 1 END) AS ValidDays,
+            COUNT(CASE WHEN c.status = 'Invalid' THEN 1 END) AS InvalidDays,
+            sl.salary AS CalculatedSalary, 
+            sl.month AS SalaryMonth, 
+            sl.year AS SalaryYear
+        FROM `User` u
+        LEFT JOIN `checkinout` c ON u.Id = c.UserID 
+            AND MONTH(c.LogDate) = :month
+            AND YEAR(c.LogDate) = :year
+        LEFT JOIN `salary_logs` sl ON u.Id = sl.employee_id 
+            AND sl.month = :month 
+            AND sl.year = :year
+        WHERE u.Id = :employee_id
+        GROUP BY u.Id, u.FullName, sl.salary, sl.month, sl.year
+    ";
+
+    try {
+        $stmt = $conn->prepare($sql);
+        $stmt->bindParam(':employee_id', $employeeId, PDO::PARAM_INT);
+        $stmt->bindParam(':month', $month, PDO::PARAM_INT);
+        $stmt->bindParam(':year', $year, PDO::PARAM_INT);
+
+        $stmt->execute();
+        $result = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        if ($result) {
+            echo json_encode([
+                'success' => true,
+                'data' => $result
+            ]);
+        } else {
+            echo json_encode([
+                'success' => false,
+                'message' => 'Không tìm thấy dữ liệu'
+            ]);
+        }
+    } catch (PDOException $e) {
+        echo json_encode([
+            'success' => false,
+            'message' => $e->getMessage()
+        ]);
+    }
+} else {
+    echo json_encode([
+        'success' => false,
+        'message' => 'Dữ liệu không hợp lệ'
+    ]);
+}
+?>
