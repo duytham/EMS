@@ -1,8 +1,8 @@
 <?php
 // Kiểm tra nếu session chưa khởi tạo thì mới khởi tạo
-if (session_status() == PHP_SESSION_NONE) {
-    session_start();
-}
+// if (session_status() == PHP_SESSION_NONE) {
+//     session_start();
+// }
 
 // Kiểm tra nếu người dùng đã đăng nhập và biến email tồn tại
 if (isset($_SESSION['user_id']) && isset($_SESSION['role_id']) && isset($_SESSION['email'])) {

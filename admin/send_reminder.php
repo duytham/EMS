@@ -1,5 +1,5 @@
 <?php
-include '../../config.php'; // Kết nối cơ sở dữ liệu
+include '../config.php'; // Kết nối cơ sở dữ liệu
 
 // Lấy giờ hiện tại
 $currentTime = date("H:i");

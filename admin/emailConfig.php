@@ -1,5 +1,5 @@
 <?php
-require_once '../../vendor/autoload.php'; // PHPMailer
+require_once '../vendor/autoload.php'; // PHPMailer
 use PHPMailer\PHPMailer\PHPMailer;
 use PHPMailer\PHPMailer\Exception;
 
@@ -17,7 +17,7 @@ class EmailConfig {
             $mail->Port = 587;
 
             // Sender and Recipient
-            $mail->setFrom('your-email@gmail.com', 'EMS - Timekeeping Reminder');
+            $mail->setFrom('duytham026@gmail.com', 'EMS - Timekeeping Reminder');
             $mail->addAddress($recipientEmail, $recipientName);
 
             // Email Content

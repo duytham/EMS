@@ -55,7 +55,7 @@
     </li>
 
     <li class="nav-item">
-        <a class="nav-link" href="./employee_salary_calculation.php">
+        <a class="nav-link" href="./manage_config_email.php">
             <i class=""></i>
             <span>Email Configuration</span>
         </a>
