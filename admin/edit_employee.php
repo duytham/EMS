@@ -42,6 +42,7 @@ if (isset($_GET['id'])) {
         $password = isset($_POST['password']) ? $_POST['password'] : '';
         $checkInTime = $_POST['checkInTime'];
         $checkOutTime = $_POST['checkOutTime'];
+        $salary_level_id = $_POST['salary_level_id']; // Lấy giá trị salary_level_id từ biểu mẫu
 
         // Kiểm tra xem email đã tồn tại hay chưa
         $emailCheck = $conn->prepare("SELECT * FROM `User` WHERE Email = :email AND Id != :id");
@@ -54,12 +55,13 @@ if (isset($_GET['id'])) {
             $errorMessage = "Email đã tồn tại. Vui lòng sử dụng email khác.";
         } else {
             // Cập nhật thông tin nhân viên
-            $sql = "UPDATE `User` SET FullName = :fullName, Email = :email, PhoneNumber = :phoneNumber, DepartmentID = :departmentID WHERE Id = :id";
+            $sql = "UPDATE `User` SET FullName = :fullName, Email = :email, PhoneNumber = :phoneNumber, DepartmentID = :departmentID, salary_level_id = :salary_level_id WHERE Id = :id";
             $stmt = $conn->prepare($sql);
             $stmt->bindParam(':fullName', $fullName);
             $stmt->bindParam(':email', $email);
             $stmt->bindParam(':phoneNumber', $phoneNumber);
             $stmt->bindParam(':departmentID', $departmentID);
+            $stmt->bindParam(':salary_level_id', $salary_level_id); // Gán giá trị salary_level_id
             $stmt->bindParam(':id', $userId);
             $stmt->execute();
 
@@ -191,17 +193,17 @@ $departments = $conn->query("SELECT * FROM `Department`")->fetchAll(PDO::FETCH_A
                         </div>
 
                         <!-- Add this inside the employee edit form -->
-                        
+
                         <div class="form-group">
-    <label for="salary_level">Salary Level:</label>
-    <select class="form-control" id="salary_level" name="salary_level" required>
-        <?php foreach ($salary_levels as $level): ?>
-            <option value="<?= $level['id'] ?>" <?= $level['id'] == $user['salary_level_id'] ? 'selected' : '' ?>>
-                Level <?= $level['level'] ?> - <?= htmlspecialchars($level['alias']) ?> - Monthly: <?= number_format($level['monthly_salary'], 0, ',', '.') ?> VND - Daily: <?= number_format($level['daily_salary'], 0, ',', '.') ?> VND
-            </option>
-        <?php endforeach; ?>
-    </select>
-</div>
+                            <label for="salary_level">Salary Level:</label>
+                            <select class="form-control" id="salary_level_id" name="salary_level_id" required>
+                                <?php foreach ($salary_levels as $level): ?>
+                                    <option value="<?= $level['id'] ?>" <?= $level['id'] == $user['salary_level_id'] ? 'selected' : '' ?>>
+                                        Level <?= $level['level'] ?> - <?= htmlspecialchars($level['alias']) ?> - Daily: <?= number_format($level['daily_salary'], 0, ',', '.') ?> VND
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
                         <button type="submit" class="btn btn-primary">Update Employee</button>
                     </form>
                 </div>

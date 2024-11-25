@@ -8,11 +8,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $alias = $_POST['alias'];
 
     // Loại bỏ dấu phân cách hàng nghìn
-    $monthly_salary = str_replace('.', '', $_POST['monthly_salary']);
     $daily_salary = str_replace('.', '', $_POST['daily_salary']);
 
     // Kiểm tra xem giá trị có phải là số và không âm
-    if (!is_numeric($monthly_salary) || !is_numeric($daily_salary) || $monthly_salary < 0 || $daily_salary < 0) {
+    if (!is_numeric($daily_salary) || $daily_salary < 0) {
         die("Invalid salary value. Please try again.");
     }
 
@@ -38,13 +37,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if ($id) {
         // Cập nhật mức lương hiện có
-        $stmt = $conn->prepare("UPDATE salary_levels SET level = ?, alias = ?, monthly_salary = ?, daily_salary = ? WHERE id = ?");
-        $stmt->execute([$level, $alias, $monthly_salary, $daily_salary, $id]);
+        $stmt = $conn->prepare("UPDATE salary_levels SET level = ?, alias = ?, daily_salary = ? WHERE id = ?");
+        $stmt->execute([$level, $alias, $daily_salary, $id]);
         $_SESSION['message'] = "Successfully updated the salary grade coefficient.";
     } else {
         // Thêm mức lương mới
-        $stmt = $conn->prepare("INSERT INTO salary_levels (level, alias, monthly_salary, daily_salary) VALUES (?, ?, ?, ?)");
-        $stmt->execute([$level, $alias, $monthly_salary, $daily_salary]);
+        $stmt = $conn->prepare("INSERT INTO salary_levels (level, alias, daily_salary) VALUES (?, ?, ?)");
+        $stmt->execute([$level, $alias, $daily_salary]);
         $_SESSION['message'] = "Successfully added the salary grade coefficient.";
     }
 
@@ -78,6 +77,7 @@ $salary_levels = $stmt->fetchAll(PDO::FETCH_ASSOC);
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
     <meta name="description" content="">
     <meta name="author" content="">
+
     <title>Admin - EDMS - Manage Salary Levels</title>
     <link href="../vendor/fontawesome-free/css/all.min.css" rel="stylesheet" type="text/css">
     <link href="https://fonts.googleapis.com/css?family=Nunito:200,200i,300,300i,400,400i,600,600i,700,700i,800,800i,900,900i" rel="stylesheet">
@@ -114,25 +114,23 @@ $salary_levels = $stmt->fetchAll(PDO::FETCH_ASSOC);
                         </div>
                         <div class="card-body">
                             <form action="manage_salary_levels.php" method="POST" class="mb-4">
-                                <div class="row">
-                                    <div class="col-md-3">
+                                <input type="hidden" id="id" name="id"> <!-- Thêm trường ẩn cho ID -->
+                                <div class="form-row">
+                                    <div class="form-group col-md-4">
                                         <label for="level">Level:</label>
-                                        <input type="number" class="form-control" id="level" name="level" required>
+                                        <input type="number" class="form-control" id="level" name="level" required placeholder="Enter salary level">
                                     </div>
-                                    <div class="col-md-3">
+                                    <div class="form-group col-md-4">
                                         <label for="alias">Alias:</label>
-                                        <input type="text" class="form-control" id="alias" name="alias" required>
+                                        <input type="text" class="form-control" id="alias" name="alias" required placeholder="Enter unique alias">
                                     </div>
-                                    <div class="col-md-3">
-                                        <label for="monthly_salary">Monthly Salary:</label>
-                                        <input type="text" class="form-control" id="monthly_salary" name="monthly_salary" required oninput="formatNumber(this)">
-                                    </div>
-                                    <div class="col-md-3">
+                                    <div class="form-group col-md-4">
                                         <label for="daily_salary">Daily Salary:</label>
-                                        <input type="text" class="form-control" id="daily_salary" name="daily_salary" required oninput="formatNumber(this)">
+                                        <input type="text" class="form-control" id="daily_salary" name="daily_salary" required placeholder="Enter daily salary" oninput="formatNumber(this)">
                                     </div>
                                 </div>
                                 <button type="submit" class="btn btn-primary mt-3">Save</button>
+                                <button type="reset" class="btn btn-secondary mt-3 ml-2">Reset</button>
                             </form>
                         </div>
                     </div>
@@ -149,7 +147,6 @@ $salary_levels = $stmt->fetchAll(PDO::FETCH_ASSOC);
                                             <th>ID</th>
                                             <th>Level</th>
                                             <th>Alias</th> <!-- Cột Alias mới -->
-                                            <th>Monthly Salary</th>
                                             <th>Daily Salary</th>
                                             <th>Actions</th>
                                         </tr>
@@ -160,7 +157,6 @@ $salary_levels = $stmt->fetchAll(PDO::FETCH_ASSOC);
                                                 <td><?= htmlspecialchars($level['id']) ?></td>
                                                 <td><?= htmlspecialchars($level['level']) ?></td>
                                                 <td><?= htmlspecialchars($level['alias']) ?></td> <!-- Hiển thị Alias -->
-                                                <td><?= htmlspecialchars(number_format($level['monthly_salary'], 0, ',', '.')) . ' đ' ?></td>
                                                 <td><?= htmlspecialchars(number_format($level['daily_salary'], 0, ',', '.')) . ' đ' ?></td>
                                                 <td>
                                                     <button class="btn btn-warning btn-sm" onclick="editSalaryLevel(<?= htmlspecialchars(json_encode($level)) ?>)">Edit</button>
@@ -173,9 +169,9 @@ $salary_levels = $stmt->fetchAll(PDO::FETCH_ASSOC);
                             </div>
                             <script>
                                 function editSalaryLevel(level) {
-                                    document.getElementById('id').value = level.id;
+                                    document.getElementById('id').value = level.id; // Nếu bạn có trường ẩn cho ID
                                     document.getElementById('level').value = level.level;
-                                    document.getElementById('monthly_salary').value = formatNumberForEdit(level.monthly_salary);
+                                    document.getElementById('alias').value = level.alias; // Thêm dòng này
                                     document.getElementById('daily_salary').value = formatNumberForEdit(level.daily_salary);
                                 }
 
@@ -187,11 +183,7 @@ $salary_levels = $stmt->fetchAll(PDO::FETCH_ASSOC);
                                     input.value = value;
                                 }
 
-                                // Thêm sự kiện cho các input
-                                document.getElementById('monthly_salary').addEventListener('input', function() {
-                                    formatNumber(this);
-                                });
-
+                                // Thêm sự kiện cho các input để định dạng số với dấu phân tách hàng nghìn
                                 document.getElementById('daily_salary').addEventListener('input', function() {
                                     formatNumber(this);
                                 });

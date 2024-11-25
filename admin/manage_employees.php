@@ -3,7 +3,6 @@ session_start(); // Bắt đầu phiên
 require_once '../config.php';  // Sử dụng file config.php với PDO
 require '../vendor/autoload.php';
 
-
 // Câu SQL để lấy danh sách nhân viên (trừ admin), bao gồm tên phòng ban
 $sql = "
     SELECT u.Id, u.FullName, u.Email, u.PhoneNumber, d.DepartmentName, u.Status 
@@ -172,7 +171,7 @@ try {
                                             <th>Department</th>
                                             <th>Status</th> <!-- Thêm cột Status -->
                                             <th>Action</th>
-                                            <th>Calculate Salary</th> <!-- Thêm cột Calculate Salary -->
+                                            <th>Salary</th> <!-- Thêm cột Calculate Salary -->
                                         </tr>
                                     </thead>
 
@@ -241,7 +240,7 @@ try {
         </a>
 
         <!-- Salary Calculation Modal -->
-        <div class="modal" id="salaryModal" tabindex="-1" role="dialog" aria-labelledby="salaryModalLabel" aria-hidden="true">
+        <div class="modal fade" id="salaryModal" tabindex="-1" role="dialog" aria-labelledby="salaryModalLabel" aria-hidden="true">
             <div class="modal-dialog" role="document">
                 <div class="modal-content">
                     <div class="modal-header">
@@ -253,31 +252,32 @@ try {
                     <div class="modal-body">
                         <form id="salaryForm">
                             <div class="form-group">
-                                <label for="employee">Nhân viên</label>
-                                <select class="form-control" id="employee" name="employee_id" required>
+                                <label for="employee">Họ tên:</label>
+                                <select class="form-control" id="employee" name="employee_id" required onchange="fetchSalaryDetails(this.value)">
                                     <?php foreach ($employees as $employee): ?>
                                         <option value="<?= $employee['Id'] ?>"><?= htmlspecialchars($employee['FullName']) ?></option>
                                     <?php endforeach; ?>
                                 </select>
                             </div>
                             <div class="form-group">
-                                <label for="salaryLevel">Hệ số lương</label>
-                                <input type="text" class="form-control" id="salaryLevel" readonly>
+                                <label for="salaryLevel">Hệ số lương:</label>
+                                <input type="text" class="form-control" id="salaryLevel" name="salaryLevel" readonly>
                             </div>
                             <div class="form-group">
-                                <label for="validDays">Số ngày công hợp lệ</label>
-                                <input type="number" class="form-control" id="validDays" readonly>
+                                <label for="validDays">Số ngày công hợp lệ:</label>
+                                <input type="number" class="form-control" id="validDays" name="validDays" readonly>
                             </div>
                             <div class="form-group">
-                                <label for="invalidDays">Số ngày công không hợp lệ</label>
-                                <input type="number" class="form-control" id="invalidDays" readonly>
+                                <label for="invalidDays">Số ngày công không hợp lệ:</label>
+                                <input type="number" class="form-control" id="invalidDays" name="invalidDays" readonly>
                             </div>
                             <div class="form-group">
-                                <label for="salaryReceived">Lương nhận được</label>
-                                <input type="text" class="form-control" id="salaryReceived" readonly>
+                                <label for="salaryReceived">Lương nhận được:</label>
+                                <input type="text" class="form-control" id="salaryReceived" name="salaryReceived" readonly>
                             </div>
-                            <button type="button" class="btn btn-success" onclick="saveSalary()">Lưu trữ tính lương</button>
+                            <button type="submit" class="btn btn-success">Lưu trữ tính lương</button>
                         </form>
+                        <div id="responseMessage" class="mt-3"></div>
                     </div>
                 </div>
             </div>
@@ -384,38 +384,157 @@ try {
         </script>
 
         <script>
-            // Open the salary modal and populate fields
+            // Hàm mở modal tính lương
             function openSalaryModal(employeeId) {
+                const currentMonth = new Date().getMonth() + 1;
+                const currentYear = new Date().getFullYear();
+
                 $.ajax({
                     url: 'get_salary_details.php',
                     method: 'GET',
                     data: {
-                        employee_id: employeeId
+                        employee_id: employeeId,
+                        month: currentMonth,
+                        year: currentYear
                     },
                     success: function(response) {
-                        const data = JSON.parse(response);
-                        $('#employee').val(employeeId);
-                        $('#salaryLevel').val(data.salary_level);
-                        $('#validDays').val(data.valid_days);
-                        $('#invalidDays').val(data.invalid_days);
-                        $('#salaryReceived').val(data.salary);
-                        $('#salaryModal').modal('show');
+                        try {
+                            const data = JSON.parse(response);
+                            if (data.success) {
+                                // Gán dữ liệu vào form
+                                $('#employee').val(employeeId);
+                                fetchSalaryDetails(employeeId); // Gọi hàm để lấy thông tin lương
+                                $('#salaryLevel').val(`${data.data.SalaryAlias} (Daily: ${data.data.DailySalary})`); // Xóa Monthly
+                                $('#validDays').val(data.data.ValidDays || 0);
+                                $('#invalidDays').val(data.data.InvalidDays || 0);
+                                $('#salaryReceived').val(data.data.CalculatedSalary || 0);
+                                $('#salaryModal').modal('show');
+                            } else {
+                                alert(data.message || 'Không tìm thấy thông tin lương');
+                            }
+                        } catch (e) {
+                            console.error("Error parsing JSON:", e);
+                            alert('Dữ liệu phản hồi không hợp lệ');
+                        }
+                    },
+                    error: function(xhr, status, error) {
+                        console.error("AJAX Error:", xhr, status, error);
+                        alert('Không thể lấy thông tin lương');
                     }
                 });
             }
 
-            // Save salary details
+            // Hàm lưu thông tin lương
             function saveSalary() {
-                const formData = $('#salaryForm').serialize();
+                const data = {
+                    employee_id: $('#employee').val(),
+                    valid_days: $('#validDays').val() || 0,
+                    invalid_days: $('#invalidDays').val() || 0,
+                    salary: $('#salaryReceived').val() || 0,
+                    month: new Date().getMonth() + 1,
+                    year: new Date().getFullYear()
+                };
+
+                debugger;  // Tạm dừng mã để kiểm tra giá trị của `data`
+                console.log('Dữ liệu gửi đi:', data); // Kiểm tra xem dữ liệu có được in ra không
+
                 $.ajax({
                     url: 'save_salary.php',
                     method: 'POST',
-                    data: formData,
+                    data: data,
+                    dataType: 'json',
                     success: function(response) {
-                        alert(response.message);
-                        $('#salaryModal').modal('hide');
+                        const messageDiv = $('#salary-message');
+
+                        if (response.success) {
+                            messageDiv.text(response.message).css('color', 'green').show();
+                        } else {
+                            messageDiv.text(response.message).css('color', 'red').show();
+                        }
+                    },
+                    error: function(xhr, status, error) {
+                        console.error('Lỗi AJAX:', error, xhr.responseText);
+                        $('#salary-message')
+                            .text('Có lỗi xảy ra khi lưu trữ thông tin lương.')
+                            .css('color', 'red')
+                            .show();
+                    },
+                });
+            }
+
+            // Hàm lấy thông tin lương
+            function fetchSalaryDetails(employeeId) {
+                const currentMonth = new Date().getMonth() + 1;
+                const currentYear = new Date().getFullYear();
+
+                $.ajax({
+                    url: 'get_salary_details.php',
+                    method: 'GET',
+                    data: {
+                        employee_id: employeeId,
+                        month: currentMonth,
+                        year: currentYear
+                    },
+                    success: function(response) {
+                        try {
+                            const data = JSON.parse(response);
+                            if (data.success) {
+                                // Populate the form fields
+                                $('#employee').val(employeeId);
+                                $('#salaryLevel').val(`${data.data.SalaryAlias} (Daily: ${formatCurrency(data.data.DailySalary)})`); // Xóa Monthly
+                                $('#validDays').val(data.data.ValidDays || 0);
+                                $('#invalidDays').val(data.data.InvalidDays || 0);
+                                $('#salaryReceived').val(formatCurrency(data.data.CalculatedSalary || 0));
+                                $('#salaryModal').modal('show');
+                            } else {
+                                alert(data.message || 'Không tìm thấy thông tin lương');
+                            }
+                        } catch (e) {
+                            console.error("Error parsing JSON:", e);
+                            alert('Dữ liệu phản hồi không hợp lệ');
+                        }
+                    },
+                    error: function(xhr, status, error) {
+                        console.error("AJAX Error:", xhr, status, error);
+                        alert('Không thể lấy thông tin lương');
                     }
                 });
+            }
+
+            // Hàm lưu thông tin lương
+            document.getElementById('salaryForm').addEventListener('submit', function(e) {
+                e.preventDefault(); // Ngăn chặn việc gửi form mặc định
+
+                let formData = new FormData(this);
+
+                fetch('save_salary.php', {
+                        method: 'POST',
+                        body: formData
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        let responseMessage = document.getElementById('responseMessage');
+                        if (data.success) {
+                            responseMessage.innerHTML = `<div class="alert alert-success">${data.message}</div>`;
+                        } else {
+                            responseMessage.innerHTML = `<div class="alert alert-danger">${data.message}</div>`;
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error:', error);
+                        document.getElementById('responseMessage').innerHTML = `<div class="alert alert-danger">Lỗi: ${error.message}</div>`;
+                    });
+            });
+
+            function clearSuccessMessage() {
+                document.getElementById('responseMessage').innerHTML = '';
+            }
+
+            function formatCurrency(value) {
+                return new Intl.NumberFormat('vi-VN', {
+                    style: 'currency',
+                    currency: 'VND'
+                }).format(value);
             }
         </script>
     </div>

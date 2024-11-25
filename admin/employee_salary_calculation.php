@@ -2,268 +2,33 @@
 session_start();
 // Include file cấu hình kết nối
 require_once '../config.php'; // Đường dẫn đến file config của bạn
+// Truy vấn lấy dữ liệu nhân viên cùng với thông tin phòng ban, mức lương, và nhật ký lương
+$sql = "
+    SELECT 
+    u.Id AS employee_id,
+    u.FullName,
+    CONCAT(d.DepartmentName, ' - ', IFNULL(d2.DepartmentName, 'No Parent')) AS Department,
+    COALESCE(sl.alias, 'No Level') AS SalaryLevel, -- Hiển thị alias thay vì level
+    COALESCE(SUM(sl_logs.valid_days + sl_logs.invalid_days), 0) AS total_work_days,
+    COALESCE(SUM(sl_logs.valid_days), 0) AS valid_days,
+    COALESCE(SUM(sl_logs.invalid_days), 0) AS invalid_days,
+    COALESCE(SUM(sl_logs.valid_days * sl.daily_salary), 0) AS total_daily_salary
+FROM user u
+LEFT JOIN department d ON u.DepartmentID = d.Id
+LEFT JOIN department d2 ON d.ParentDepartmentID = d2.Id
+LEFT JOIN salary_levels sl ON u.salary_level_id = sl.id
+LEFT JOIN salary_logs sl_logs ON u.Id = sl_logs.employee_id
+    AND sl_logs.month = MONTH(CURDATE())
+    AND sl_logs.year = YEAR(CURDATE())
+WHERE u.RoleID = 2 -- Chỉ hiển thị nhân viên
+GROUP BY u.Id, sl.alias
+ORDER BY u.FullName;
 
-// Khởi tạo biến $errorMessage với giá trị mặc định
-$errorMessage = '';
+";
 
-// Admin đang đăng nhập (thay đổi cho phù hợp với session của bạn)
-$currentAdminId = 9; // ID của admin
-
-// Khởi tạo mảng để chứa dữ liệu lương
-$employees = [];
-
-// Hàm đệ quy để SHOW cây phòng ban 
-function renderDepartmentTree($departments)
-{
-    echo '<ul>';
-    foreach ($departments as $department) {
-        echo '<li>';
-        echo '<input type="checkbox" name="departments[]" value="' . $department['id'] . '"> ' . htmlspecialchars($department['DepartmentName']);
-        if (!empty($department['children'])) {
-            renderDepartmentTree($department['children']);
-        }
-        echo '</li>';
-    }
-    echo '</ul>';
-}
-
-// Hàm đệ quy để GET cây phòng ban
-function getDepartments($parentId = 0)
-{
-    global $conn;
-    $sql = "SELECT id, DepartmentName, ParentDepartmentID FROM department WHERE ParentDepartmentID = :parentId";
-    $stmt = $conn->prepare($sql);
-    $stmt->execute([':parentId' => $parentId]);
-    $departments = $stmt->fetchAll(PDO::FETCH_ASSOC);
-
-    $result = [];
-    foreach ($departments as $department) {
-        $children = getDepartments($department['id']);
-        $department['children'] = $children;
-        $result[] = $department;
-    }
-    return $result;
-}
-
-$departmentsTree = getDepartments(); // Gọi hàm để lấy cây phòng ban
-
-if (isset($_POST['filter'])) {
-    $selectedDepartments = $_POST['departments'] ?? [];
-    // Thực hiện truy vấn để lấy nhân viên theo phòng ban đã chọn
-    $departmentCondition = '';
-    if (!empty($selectedDepartments)) {
-        $departmentCondition = 'WHERE u.DepartmentID IN (' . implode(',', array_map('intval', $selectedDepartments)) . ')';
-    }
-
-    $sql = "
-        SELECT 
-            u.Id AS employee_id,
-            u.FullName,
-            CONCAT(d.DepartmentName, ' - ', COALESCE(pd.DepartmentName, '')) AS Department,
-            sl.alias AS SalaryLevel,
-            sl.monthly_salary,
-            sl.daily_salary,
-            -- Các trường khác...
-        FROM 
-            user u
-        LEFT JOIN 
-            department d ON u.DepartmentID = d.id
-        LEFT JOIN 
-            department pd ON d.ParentDepartmentID = pd.id
-        LEFT JOIN 
-            salary_levels sl ON u.salary_level_id = sl.id
-        LEFT JOIN 
-            checkinout c ON u.Id = c.UserID
-        $departmentCondition
-        GROUP BY 
-            u.Id;
-    ";
-
-    // Tiếp tục thực hiện truy vấn như trước
-    $stmt = $conn->prepare($sql);
-    $stmt->execute();
-    $employees = $stmt->fetchAll(PDO::FETCH_ASSOC);
-}
-
-try {
-    // Truy vấn tính valid_days, invalid_days, và tính lương
-    $sql = "
-        SELECT 
-            u.Id AS employee_id,
-            u.FullName,
-            CONCAT(d.DepartmentName, ' - ', COALESCE(pd.DepartmentName, '')) AS Department,
-            sl.alias AS SalaryLevel,
-            sl.monthly_salary,
-            sl.daily_salary,
-            -- Tính valid_days
-            COUNT(DISTINCT CASE 
-                WHEN (c.ActionType = 'checkin' AND TIME(c.CheckInTime) <= '08:00:00') 
-                OR (c.ActionType = 'checkout' AND TIME(c.CheckOutTime) >= '17:00:00') 
-                OR c.status = 'valid' 
-                THEN c.LogDate 
-            END) AS valid_days,
-
-            -- Tính invalid_days (Check-in muộn hoặc check-out sớm)
-            COUNT(DISTINCT CASE 
-                WHEN (c.ActionType = 'checkin' AND TIME(c.CheckInTime) > '08:00:00') 
-                OR (c.ActionType = 'checkout' AND TIME(c.CheckOutTime) < '17:00:00') 
-                THEN c.LogDate 
-            END) AS invalid_days,
-
-            -- Tổng số ngày làm việc trong tháng (không phân biệt valid và invalid)
-            COUNT(DISTINCT c.LogDate) AS total_work_days, 
-
-            -- Tổng lương tính theo tháng
-            ROUND(
-                (
-                    COUNT(DISTINCT CASE 
-                        WHEN (c.ActionType = 'checkin' AND TIME(c.CheckInTime) <= '08:00:00') 
-                        OR (c.ActionType = 'checkout' AND TIME(c.CheckOutTime) >= '17:00:00') 
-                        OR c.status = 'valid' 
-                        THEN c.LogDate 
-                    END)
-                    + 0.5 * COUNT(DISTINCT CASE 
-                        WHEN c.status = 'rejected' THEN c.LogDate 
-                    END)
-                ) / 22 * sl.monthly_salary,
-                2
-            ) AS total_monthly_salary,
-
-            -- Tổng lương tính theo ngày
-            ROUND(
-                (
-                    COUNT(DISTINCT CASE 
-                        WHEN (c.ActionType = 'checkin' AND TIME(c.CheckInTime) <= '08:00:00') 
-                        OR (c.ActionType = 'checkout' AND TIME(c.CheckOutTime) >= '17:00:00') 
-                        OR c.status = 'valid' 
-                        THEN c.LogDate 
-                    END)
-                    + 0.5 * COUNT(DISTINCT CASE 
-                        WHEN c.status = 'rejected' THEN c.LogDate 
-                    END)
-                ) * sl.daily_salary,
-                2
-            ) AS total_daily_salary
-        FROM 
-            user u
-        LEFT JOIN 
-            department d ON u.DepartmentID = d.id
-        LEFT JOIN 
-            department pd ON d.ParentDepartmentID = pd.id
-        LEFT JOIN 
-            salary_levels sl ON u.salary_level_id = sl.id
-        LEFT JOIN 
-            checkinout c ON u.Id = c.UserID
-        WHERE 
-            u.RoleID = 2 
-        GROUP BY 
-            u.Id;
-    ";
-
-    // Chuẩn bị và thực thi truy vấn
-    $stmt = $conn->prepare($sql);
-    $stmt->execute();
-    $employees = $stmt->fetchAll(PDO::FETCH_ASSOC);
-
-    // Kiểm tra thông báo thành công và lưu nó vào biến
-    if (isset($_SESSION['successMessage'])) {
-        $successMessage = $_SESSION['successMessage'];
-        unset($_SESSION['successMessage']); // Xóa thông báo sau khi đã hiển thị
-    }
-
-    // Cũng có thể kiểm tra thông báo lỗi tương tự
-    if (isset($_SESSION['errorMessage'])) {
-        $errorMessage = $_SESSION['errorMessage'];
-        unset($_SESSION['errorMessage']); // Xóa thông báo sau khi đã hiển thị
-    }
-
-    // Xử lý lưu trữ tính lương khi nút được nhấn
-    if (isset($_POST['save_salary'])) {
-        try {
-            // Kiểm tra xem bản ghi đã tồn tại chưa
-            $check_stmt = $conn->prepare("
-                SELECT COUNT(*) FROM salary_logs 
-                WHERE month = :month AND year = :year AND employee_id = :employee_id
-            ");
-
-            // Cập nhật thông tin lương nếu bản ghi đã tồn tại
-            $update_stmt = $conn->prepare("
-                UPDATE salary_logs 
-                SET valid_days = :valid_days, invalid_days = :invalid_days, salary = :salary, processed_by = :processed_by 
-                WHERE month = :month AND year = :year AND employee_id = :employee_id
-            ");
-
-            // Thêm mới bản ghi nếu chưa tồn tại
-            $insert_stmt = $conn->prepare("
-                INSERT INTO salary_logs (employee_id, valid_days, invalid_days, month, year, salary, processed_by)
-                VALUES (:employee_id, :valid_days, :invalid_days, :month, :year, :salary, :processed_by)
-            ");
-
-            // Thực hiện vòng lặp xử lý dữ liệu
-            foreach ($employees as $employee) {
-                // Kiểm tra xem bản ghi đã tồn tại chưa
-                $check_stmt->execute([
-                    ':month' => date('m'),
-                    ':year' => date('Y'),
-                    ':employee_id' => $employee['employee_id']
-                ]);
-
-                $exists = $check_stmt->fetchColumn();
-
-                if ($exists > 0) {
-                    // Nếu bản ghi đã tồn tại, cập nhật thông tin
-                    $update_stmt->execute([
-                        ':employee_id' => $employee['employee_id'],
-                        ':valid_days' => $employee['valid_days'],
-                        ':invalid_days' => $employee['invalid_days'],
-                        ':month' => date('m'),
-                        ':year' => date('Y'),
-                        ':salary' => $employee['total_monthly_salary'],
-                        ':processed_by' => $currentAdminId
-                    ]);
-
-                    if ($update_stmt->rowCount() > 0) {
-                        echo "Updated salary record for employee ID: " . $employee['employee_id'] . "<br>";
-                    }
-                } else {
-                    // Nếu bản ghi chưa tồn tại, chèn bản ghi mới
-                    $insert_stmt->execute([
-                        ':employee_id' => $employee['employee_id'],
-                        ':valid_days' => $employee['valid_days'],
-                        ':invalid_days' => $employee['invalid_days'],
-                        ':month' => date('m'),
-                        ':year' => date('Y'),
-                        ':salary' => $employee['total_monthly_salary'],
-                        ':processed_by' => $currentAdminId
-                    ]);
-
-                    // Kiểm tra xem có bản ghi được cập nhật không
-                    if ($update_stmt->rowCount() > 0) {
-                        echo "Updated salary record for employee ID: " . $employee['employee_id'] . "<br>";
-                    } else {
-                        echo "No record updated for employee ID: " . $employee['employee_id'] . "<br>";
-                    }
-
-                    // Kiểm tra xem có bản ghi được chèn không
-                    if ($insert_stmt->rowCount() > 0) {
-                        echo "Inserted new salary record for employee ID: " . $employee['employee_id'] . "<br>";
-                    } else {
-                        echo "Failed to insert salary record for employee ID: " . $employee['employee_id'] . "<br>";
-                    }
-                }
-            }
-
-            $successMessage = "Salary records saved successfully!";
-            // if ($stmt->errorCode() != '00000') {
-            //     print_r($stmt->errorInfo());
-            // }
-        } catch (PDOException $e) {
-            echo "Error: " . $e->getMessage();
-        }
-    }
-} catch (PDOException $e) {
-    echo "Error: " . $e->getMessage();
-}
+$stmt = $conn->prepare($sql);
+$stmt->execute();
+$employees = $stmt->fetchAll(PDO::FETCH_ASSOC);
 ?>
 
 
@@ -330,11 +95,8 @@ try {
                             </button> <!-- Nút lưu trữ tính lương -->
                         </form>
 
-                        <form method="POST" action="">
-                            <h3>Lọc theo phòng ban</h3>
-                            <?php renderDepartmentTree($departmentsTree); ?>
-                            <button type="submit" name="filter" class="btn btn-primary">Lọc</button>
-                        </form>
+                        <!-- <form method="POST" action="">
+                        </form> -->
 
                         <div class="card shadow mb-4">
                             <div class="card-header py-3">
@@ -351,8 +113,7 @@ try {
                                                     <th>Total Work Days</th> <!-- Thêm cột mới -->
                                                     <th>Valid Days</th>
                                                     <th>Invaild Days</th>
-                                                    <th>Total Monthly Salary</th>
-                                                    <th>Total Daily Salary</th>
+                                                    <th>Salary Received</th>
                                                 </tr>
                                             </thead>
 
@@ -366,7 +127,6 @@ try {
                                                         <td><?= $employee['total_work_days'] ?></td>
                                                         <td><?= $employee['valid_days'] ?></td>
                                                         <td><?= $employee['invalid_days'] ?></td>
-                                                        <td><?= number_format($employee['total_monthly_salary'], 0, ',', '.') . ' đ' ?></td> <!-- Định dạng lương tháng -->
                                                         <td><?= number_format($employee['total_daily_salary'], 0, ',', '.') . ' đ' ?></td> <!-- Định dạng lương ngày -->
                                                     </tr>
                                                 <?php endforeach; ?>
