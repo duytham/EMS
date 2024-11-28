@@ -1,19 +1,29 @@
 <?php
-include '../config.php';
+session_start(); // Bắt đầu phiên
+require_once '../config.php';  // Sử dụng file config.php với PDO
 
-// Kết nối cơ sở dữ liệu
-if ($conn) {
-    echo "Database connected successfully!";
-} else {
-    echo "Failed to connect to the database.";
+// Lấy danh sách cấu hình email và thông tin user, department
+$query = "SELECT e.UserId, u.FullName, u.Email, 
+        CONCAT(d1.DepartmentName, ' - ', IFNULL(d2.DepartmentName, 'No Parent')) AS DepartmentName,
+        e.CheckInTime, e.CheckOutTime 
+        FROM emailConfig e 
+        JOIN user u ON e.UserId = u.Id
+        LEFT JOIN department d1 ON u.DepartmentID = d1.Id
+        LEFT JOIN department d2 ON d1.ParentDepartmentID = d2.Id
+        WHERE u.Status = 'active' ";
+
+try {
+    $stmt = $conn->prepare($query);
+    $stmt->execute();
+    $configs = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    // Kiểm tra dữ liệu trả về
+    if (empty($configs)) {
+        echo "Không có nhân viên nào thỏa mãn điều kiện";
+    }
+} catch (PDOException $e) {
+    echo "Lỗi truy vấn: " . $e->getMessage();
 }
-// Lấy danh sách cấu hình email
-$query = "SELECT e.Id, u.FullName, e.CheckInTime, e.CheckOutTime 
-          FROM emailConfig e 
-          JOIN user u ON e.UserID = u.Id";
-$stmt = $conn->prepare($query);
-$stmt->execute();
-$configs = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 // Cập nhật giờ check-in/check-out
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
@@ -47,6 +57,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
     <meta name="description" content="">
     <meta name="author" content="">
+
     <title>Admin - EDMS - Manage Config Email</title>
 
     <link href="../vendor/fontawesome-free/css/all.min.css" rel="stylesheet" type="text/css">
@@ -72,7 +83,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                         <label>New Check-out Time: <input type="time" name="bulkCheckOutTime"></label>
                         <button type="submit">Update All</button>
                     </form>
-                    <button id="sendEmailButton" class="btn btn-primary" type="button">Send Email</button>
+                    <!-- <button id="sendEmailButton" class="btn btn-primary" type="button">Send Email</button> -->
 
                     <hr>
 
@@ -82,22 +93,33 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                             <table class="table table-bordered" id="dataTable" width="100%" cellspacing="0">
                                 <thead>
                                     <tr>
+                                        <th colspan="4" onclick="toggleConfig()" style="cursor: pointer; background-color: #f8f9fa; text-align: center;">
+                                            Config time of each employee (click to display information)
+                                        </th>
+                                    </tr>
+                                    <tr id="config-table-header" style="display: none;">
+                                        <th>ID</th>
                                         <th>Employee Name</th>
+                                        <th>Email</th>
+                                        <th>Department</th>
                                         <th>Check-in Time</th>
                                         <th>Check-out Time</th>
                                         <th>Actions</th>
                                     </tr>
                                 </thead>
-                                <tbody>
+                                <tbody id="config-table-body" style="display: none;">
                                     <?php foreach ($configs as $config): ?>
                                         <tr>
                                             <form method="POST" action="">
+                                                <td><?php echo htmlspecialchars($config['UserId']); ?></td>
                                                 <td><?php echo htmlspecialchars($config['FullName']); ?></td>
+                                                <td><?php echo htmlspecialchars($config['Email']); ?></td>
+                                                <td><?php echo htmlspecialchars($config['DepartmentName']); ?></td>
                                                 <td><input type="time" name="CheckInTime" value="<?php echo htmlspecialchars($config['CheckInTime']); ?>"></td>
                                                 <td><input type="time" name="CheckOutTime" value="<?php echo htmlspecialchars($config['CheckOutTime']); ?>"></td>
                                                 <td>
-                                                    <input type="hidden" name="UserID" value="<?php echo htmlspecialchars($config['Id']); ?>">
-                                                    <button type="submit">Update</button>
+                                                    <input type="hidden" name="UserID" value="<?php echo htmlspecialchars($config['UserId']); ?>">
+                                                    <button class="btn btn-primary" type="submit">Update</button>
                                                 </td>
                                             </form>
                                         </tr>
@@ -106,6 +128,20 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                             </table>
                         </div>
                     </div>
+
+                    <script>
+                        function toggleConfig() {
+                            var header = document.getElementById('config-table-header');
+                            var body = document.getElementById('config-table-body');
+                            if (header.style.display === "none") {
+                                header.style.display = "table-row";
+                                body.style.display = "table-row-group"; // Hiển thị tbody
+                            } else {
+                                header.style.display = "none";
+                                body.style.display = "none"; // Ẩn tbody
+                            }
+                        }
+                    </script>
                 </div>
             </div>
         </div>
@@ -137,19 +173,19 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         <script src="../vendor/jquery-easing/jquery.easing.min.js"></script>
 
         <!-- Custom scripts for all pages-->
-        <!-- <script src="../js/sb-admin-2.min.js"></script> -->
+        <script src="../js/sb-admin-2.min.js"></script>
 
         <!-- Page level plugins -->
-        <!-- <script src="../vendor/chart.js/Chart.min.js"></script>
+        <script src="../vendor/chart.js/Chart.min.js"></script>
         <script src="../vendor/datatables/jquery.dataTables.min.js"></script>
-        <script src="../vendor/datatables/dataTables.bootstrap4.min.js"></script> -->
+        <script src="../vendor/datatables/dataTables.bootstrap4.min.js"></script>
 
         <!-- Page level custom scripts -->
-        <!-- <script src="../js/demo/chart-area-demo.js"></script>
         <script src="../js/demo/chart-area-demo.js"></script>
-        <script src="../js/demo/datatables-demo.js"></script> -->
+        <script src="../js/demo/chart-area-demo.js"></script>
+        <script src="../js/demo/datatables-demo.js"></script>
         <script>
-            document.getElementById('send-email-button').addEventListener('click', function() {
+            document.getElementById('sendEmailButton').addEventListener('click', function() {
                 fetch('send_email.php', {
                         method: 'POST',
                         headers: {
