@@ -1,0 +1,94 @@
+<?php
+session_start();
+include '../config.php';
+
+// Fetch employee's salary level
+$employeeId = $_GET['employee_id'];
+$stmt = $conn->prepare("SELECT u.FullName, sl.level, sl.monthly_salary, sl.daily_salary
+                        FROM user u
+                        JOIN salary_levels sl ON u.salary_level_id = sl.id
+                        WHERE u.Id = ?");
+$stmt->execute([$employeeId]);
+$employee = $stmt->fetch(PDO::FETCH_ASSOC);
+
+// Fetch attendance data for the selected month and year
+$selectedMonth = $_GET['month'] ?? date('m');
+$selectedYear = $_GET['year'] ?? date('Y');
+$stmt = $conn->prepare("SELECT COUNT(*) AS valid_days
+                        FROM checkinout
+                        WHERE UserID = ? AND MONTH(CheckInTime) = ? AND YEAR(CheckInTime) = ? AND status = 'Valid'");
+$stmt->execute([$employeeId, $selectedMonth, $selectedYear]);
+$attendance = $stmt->fetch(PDO::FETCH_ASSOC);
+
+// Calculate salary
+$daysInMonth = cal_days_in_month(CAL_GREGORIAN, $selectedMonth, $selectedYear);
+$validDays = $attendance['valid_days'];
+$monthlySalary = $employee['monthly_salary'];
+$dailySalary = $employee['daily_salary'];
+
+$salaryByMonth = ($validDays / $daysInMonth) * $mossnthlySalary;
+$salaryByDay = $validDays * $dailySalary;
+?>
+
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Calculate Salary</title>
+    <link href="../css/sb-admin-2.min.css" rel="stylesheet">
+</head>
+
+<body>
+    <form method="POST" action="save_salary.php">
+        <!-- Chọn phòng ban -->
+        <div class="form-group">
+            <label for="department">Department:</label>
+            <select id="department" name="department[]" class="form-control" multiple>
+                <?php foreach ($departments as $department): ?>
+                    <option value="<?= $department['id'] ?>"><?= $department['name'] ?></option>
+                <?php endforeach; ?>
+            </select>
+        </div>
+
+        <!-- Hiển thị tên nhân viên -->
+        <div class="form-group">
+            <label for="employee">Full Name:</label>
+            <select id="employee" name="employee[]" class="form-control" multiple readonly>
+                <!-- Tên nhân viên được load động bằng Ajax -->
+            </select>
+        </div>
+
+        <!-- Thông tin chỉ đọc -->
+        <div class="form-group">
+            <label>Salary Level:</label>
+            <input type="text" id="salary_level" class="form-control" readonly>
+        </div>
+
+        <div class="form-group">
+            <label>Total Work Days:</label>
+            <input type="text" id="total_work_days" class="form-control" readonly>
+        </div>
+
+        <div class="form-group">
+            <label>Valid Days:</label>
+            <input type="text" id="valid_days" class="form-control" readonly>
+        </div>
+
+        <div class="form-group">
+            <label>Invalid Days:</label>
+            <input type="text" id="invalid_days" class="form-control" readonly>
+        </div>
+
+        <div class="form-group">
+            <label>Total Salary Received:</label>
+            <input type="text" id="total_salary" class="form-control" readonly>
+        </div>
+
+        <!-- Nút Lưu trữ -->
+        <button type="submit" class="btn btn-success">Lưu trữ</button>
+    </form>
+
+</body>
+
+</html>

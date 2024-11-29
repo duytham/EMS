@@ -7,78 +7,51 @@ $response = ["success" => false, "message" => ""];
 
 try {
     if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-        // Kiểm tra dữ liệu gửi đi từ form
-        $employee_id = $_POST['employee_id'] ?? null;
-        $valid_days = $_POST['valid_days'] ?? 0;
-        $invalid_days = $_POST['invalid_days'] ?? 0;
-        $salary = $_POST['salary'] ?? 0;
+        $employees = $_POST['employee'] ?? [];
+        $logData = [];
 
-        // Kiểm tra dữ liệu hợp lệ
-        if (!$employee_id) {
-            $response['message'] = "Dữ liệu không hợp lệ!";
-            echo json_encode($response); // Sử dụng json_encode() để trả về JSON hợp lệ
-            exit;
-        }
+        foreach ($employees as $employeeId) {
+            // Lấy dữ liệu từ bảng liên quan
+            $query = "
+                SELECT 
+                    u.FullName, 
+                    s.Alias, 
+                    s.DailySalary, 
+                    COUNT(c.id) AS total_work_days,
+                    SUM(c.valid = 1) AS valid_days,
+                    SUM(c.valid = 0) AS invalid_days
+                FROM users u
+                JOIN salaryLevels s ON u.SalaryLevelID = s.Id
+                LEFT JOIN checkinout c ON u.Id = c.UserID
+                WHERE u.Id = ?
+            ";
+            $stmt = $conn->prepare($query);
+            $stmt->execute([$employeeId]);
+            $employeeData = $stmt->fetch(PDO::FETCH_ASSOC);
 
-        // Kiểm tra dữ liệu đã tồn tại
-        $currentMonth = date('n'); // Tháng hiện tại
-        $currentYear = date('Y');
-        $processedBy = 9; // ID người xử lý mặc định (admin)
+            // Tính lương
+            $receivedSalary = $employeeData['valid_days'] * $employeeData['DailySalary'];
 
-        $stmt = $conn->prepare("
-            SELECT id FROM salary_logs 
-            WHERE employee_id = :employee_id 
-            AND month = :month 
-            AND year = :year
-        ");
-        $stmt->execute([
-            ':employee_id' => $employee_id,
-            ':month' => $currentMonth,
-            ':year' => $currentYear
-        ]);
-
-        if ($stmt->rowCount() > 0) {
-            // Nếu tồn tại, cập nhật
-            $stmt = $conn->prepare("
-                UPDATE salary_logs
-                SET valid_days = :valid_days, 
-                    invalid_days = :invalid_days,
-                    salary = :salary,
-                    updated_at = NOW()
-                WHERE employee_id = :employee_id 
-                AND month = :month 
-                AND year = :year
-            ");
-            $stmt->execute([
-                ':valid_days' => $valid_days,
-                ':invalid_days' => $invalid_days,
-                ':salary' => $salary,
-                ':employee_id' => $employee_id,
-                ':month' => $currentMonth,
-                ':year' => $currentYear
+            // Lưu vào salary_logs
+            $logQuery = "INSERT INTO salary_logs (UserId, TotalWorkDays, ValidDays, InvalidDays, TotalSalary, CreatedAt)
+                         VALUES (?, ?, ?, ?, ?, NOW())";
+            $logStmt = $conn->prepare($logQuery);
+            $logStmt->execute([
+                $employeeId,
+                $employeeData['total_work_days'],
+                $employeeData['valid_days'],
+                $employeeData['invalid_days'],
+                $receivedSalary
             ]);
 
-            $response['success'] = true;
-            $response['message'] = "Cập nhật thông tin lương thành công!";
-        } else {
-            // Nếu không tồn tại, thêm mới
-            $stmt = $conn->prepare("
-                INSERT INTO salary_logs (employee_id, valid_days, invalid_days, month, year, salary, processed_by, processed_at)
-                VALUES (:employee_id, :valid_days, :invalid_days, :month, :year, :salary, :processed_by, NOW())
-            ");
-            $stmt->execute([
-                ':employee_id' => $employee_id,
-                ':valid_days' => $valid_days,
-                ':invalid_days' => $invalid_days,
-                ':month' => $currentMonth,
-                ':year' => $currentYear,
-                ':salary' => $salary,
-                ':processed_by' => $processedBy
-            ]);
-
-            $response['success'] = true;
-            $response['message'] = "Lưu thông tin lương mới thành công!";
+            $logData[] = [
+                'FullName' => $employeeData['FullName'],
+                'TotalSalary' => $receivedSalary
+            ];
         }
+
+        // Hiển thị thông báo thành công
+        echo "Lưu trữ thành công!";
     } else {
         $response['message'] = "Phương thức không hợp lệ!";
     }

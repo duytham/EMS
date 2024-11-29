@@ -1,0 +1,13 @@
+<?php
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $employeeId = $_POST['employeeId'];
+
+    $query = "SELECT SalaryLevel, TotalWorkDays, ValidDays, InvalidDays, TotalSalary 
+              FROM salary_details 
+              WHERE UserId = ?";
+    $stmt = $conn->prepare($query);
+    $stmt->execute([$employeeId]);
+    $salaryInfo = $stmt->fetch(PDO::FETCH_ASSOC);
+
+    echo json_encode($salaryInfo);
+}

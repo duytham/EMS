@@ -25,26 +25,53 @@ try {
     echo "Lỗi truy vấn: " . $e->getMessage();
 }
 
+// Lấy thời gian gần nhất đã config
+$latestQuery = "SELECT CheckInTime, CheckOutTime FROM emailConfig LIMIT 1";
+$latestStmt = $conn->prepare($latestQuery);
+$latestStmt->execute();
+$latestConfig = $latestStmt->fetch(PDO::FETCH_ASSOC);
+
+// Giá trị mặc định khi chưa có cấu hình gần nhất
+$defaultCheckIn = "07:30";
+$defaultCheckOut = "17:30";
+
+$lastCheckIn = $latestConfig['CheckInTime'] ?? $defaultCheckIn;
+$lastCheckOut = $latestConfig['CheckOutTime'] ?? $defaultCheckOut;
+
 // Cập nhật giờ check-in/check-out
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     if (isset($_POST['bulkCheckInTime']) && isset($_POST['bulkCheckOutTime'])) {
         // Cập nhật hàng loạt
         $bulkCheckInTime = $_POST['bulkCheckInTime'];
         $bulkCheckOutTime = $_POST['bulkCheckOutTime'];
-        $updateQuery = "UPDATE emailConfig SET CheckInTime = ?, CheckOutTime = ?";
+
+        $updateQuery = "UPDATE emailConfig 
+                        SET CheckInTime = ?, 
+                        CheckOutTime = ?";
         $updateStmt = $conn->prepare($updateQuery);
         $updateStmt->execute([$bulkCheckInTime, $bulkCheckOutTime]);
+
+        // Lưu thời gian gần nhất
+        $lastCheckIn = $bulkCheckInTime;
+        $lastCheckOut = $bulkCheckOutTime;
+
+        // Lưu thông báo vào session
+        $_SESSION['success_message'] = "Bulk hour configuration successful";
     } elseif (isset($_POST['UserID']) && isset($_POST['CheckInTime']) && isset($_POST['CheckOutTime'])) {
         // Cập nhật từng user
         $userId = $_POST['UserID'];
         $checkInTime = $_POST['CheckInTime'];
         $checkOutTime = $_POST['CheckOutTime'];
-        $updateQuery = "UPDATE emailConfig SET CheckInTime = ?, CheckOutTime = ? WHERE UserID = ?";
+
+        $updateQuery = "UPDATE emailConfig SET CheckInTime = ?, CheckOutTime = ? WHERE UserId = ?";
         $updateStmt = $conn->prepare($updateQuery);
         $updateStmt->execute([$checkInTime, $checkOutTime, $userId]);
-    }
 
+        // Lưu thông báo vào session
+        $_SESSION['success_message'] = "Update check-in/check-out time for employees successful.";
+    }
     header("Location: manage_config_email.php");
+    exit();
 }
 ?>
 
@@ -58,7 +85,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     <meta name="description" content="">
     <meta name="author" content="">
 
-    <title>Admin - EDMS - Manage Config Email</title>
+    <title>Admin - EDMS - Email Configuration</title>
 
     <link href="../vendor/fontawesome-free/css/all.min.css" rel="stylesheet" type="text/css">
     <link href="https://fonts.googleapis.com/css?family=Nunito:200,200i,300,300i,400,400i,600,600i,700,700i,800,800i,900,900i" rel="stylesheet">
@@ -71,29 +98,66 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         <div id="content-wrapper" class="d-flex flex-column">
             <div id="content">
                 <?php include('../templates/navbar.php') ?>
+
                 <div class="container-fluid">
+                    <!-- Hiển thị thông báo -->
+                    <?php if (isset($_SESSION['success_message'])): ?>
+                        <div class="alert alert-success alert-dismissible fade show" role="alert">
+                            <?php echo $_SESSION['success_message']; ?>
+                            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                        </div>
+                        <?php unset($_SESSION['success_message']); // Xóa thông báo sau khi hiển thị 
+                        ?>
+                    <?php endif; ?>
 
                     <!-- Page Heading -->
                     <h1 class="h3 mb-2 text-gray-800">Manage Config</h1>
                     <p class="mb-4">Manage config check-in, check-out time</p>
 
                     <!-- Form chỉnh sửa giờ hàng loạt -->
-                    <form method="POST" action="">
-                        <label>New Check-in Time: <input type="time" name="bulkCheckInTime"></label>
-                        <label>New Check-out Time: <input type="time" name="bulkCheckOutTime"></label>
-                        <button type="submit">Update All</button>
-                    </form>
-                    <!-- <button id="sendEmailButton" class="btn btn-primary" type="button">Send Email</button> -->
+                    <div class="card mb-4">
+                        <div class="card-header">
+                            <h5 class="m-0 font-weight-bold text-primary">Bulk Time Updates</h5>
+                        </div>
+                        <div class="card-body">
+                            <form method="POST" action="">
+                                <div class="form-row">
+                                    <div class="form-group col-md-6">
+                                        <label for="bulkCheckInTime">New Check-in time:</label>
+                                        <input type="time" class="form-control" id="bulkCheckInTime" name="bulkCheckInTime" value="<?php echo htmlspecialchars($lastCheckIn); ?>">
+                                    </div>
+                                    <div class="form-group col-md-6">
+                                        <label for="bulkCheckOutTime">New Check-out time:</label>
+                                        <input type="time" class="form-control" id="bulkCheckOutTime" name="bulkCheckOutTime" value="<?php echo htmlspecialchars($lastCheckOut); ?>">
+                                    </div>
+                                </div>
+                                <button class="btn btn-primary" type="submit">Update all</button>
+                            </form>
+                        </div>
+                    </div>
 
+                    <!-- Hiển thị thời gian cấu hình gần nhất -->
+                    <?php if (isset($lastCheckIn) && isset($lastCheckOut)): ?>
+                        <div class="alert alert-info" role="alert">
+                            Latest configuration time:
+                            <strong>Check-in:</strong> <?php echo htmlspecialchars($lastCheckIn); ?>,
+                            <strong>Check-out:</strong> <?php echo htmlspecialchars($lastCheckOut); ?>
+                        </div>
+                    <?php endif; ?>
                     <hr>
 
                     <!-- Bảng chỉnh sửa giờ từng user -->
+
                     <div class="card-body">
+
                         <div class="table-responsive">
+                            <div class="card-header">
+                                <h5 class="m-0 font-weight-bold text-primary">Employee's time Configuration</h5>
+                            </div>
                             <table class="table table-bordered" id="dataTable" width="100%" cellspacing="0">
                                 <thead>
                                     <tr>
-                                        <th colspan="4" onclick="toggleConfig()" style="cursor: pointer; background-color: #f8f9fa; text-align: center;">
+                                        <th colspan="7" onclick="toggleConfig()" style="cursor: pointer; background-color: #f8f9fa; text-align: center;">
                                             Config time of each employee (click to display information)
                                         </th>
                                     </tr>
@@ -104,9 +168,10 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                                         <th>Department</th>
                                         <th>Check-in Time</th>
                                         <th>Check-out Time</th>
-                                        <th>Actions</th>
+                                        <th>Action</th>
                                     </tr>
                                 </thead>
+
                                 <tbody id="config-table-body" style="display: none;">
                                     <?php foreach ($configs as $config): ?>
                                         <tr>

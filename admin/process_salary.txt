@@ -1,0 +1,21 @@
+<?php
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $employees = $_POST['employees'];
+    $month = date('Y-m'); // Tháng tính lương
+
+    foreach ($employees as $employee) {
+        $query = "INSERT INTO salary_logs (UserId, Month, ValidDays, InvalidDays, SalaryLevel, TotalSalary) 
+                  VALUES (?, ?, ?, ?, ?, ?)";
+        $stmt = $conn->prepare($query);
+        $stmt->execute([
+            $employee['id'],
+            $month,
+            $employee['validDays'],
+            $employee['invalidDays'],
+            $employee['salaryLevel'],
+            $employee['totalSalary']
+        ]);
+    }
+
+    header("Location: salary_success.php");
+}

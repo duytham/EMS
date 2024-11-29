@@ -31,7 +31,6 @@ $stmt->execute();
 $employees = $stmt->fetchAll(PDO::FETCH_ASSOC);
 ?>
 
-
 <!DOCTYPE html>
 <html lang="en">
 
@@ -85,16 +84,15 @@ $employees = $stmt->fetchAll(PDO::FETCH_ASSOC);
                             <p><?= $statusMessage ?></p>
                         <?php endif; ?>
 
-
                         <form method="POST" action="">
                             <button type="submit" name="calculate_salary" class="btn btn-warning mr-2">
                                 <i class="fas fa-sync-alt"></i> Recalculate
                             </button>
-                            <button type="submit" name="save_salary" class="btn btn-success">
+                            <!-- <button type="submit" name="save_salary" class="btn btn-success">
                                 <i class="fas fa-save"></i> Save
-                            </button> <!-- Nút lưu trữ tính lương -->
+                            </button> Nút lưu trữ tính lương -->
                         </form>
-
+                        <a href="calculate_salary.php" class="btn btn-primary mb-3">Tính lương</a>
                         <!-- <form method="POST" action="">
                         </form> -->
 

@@ -1,0 +1,32 @@
+<?php
+// Kết nối database
+require_once '../config.php'; // Chứa biến $conn kết nối PDO
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    // Lấy danh sách phòng ban từ yêu cầu AJAX
+    $departments = $_POST['departments']; // Dạng mảng [id1, id2, ...]
+
+    if (!empty($departments)) {
+        // Tạo truy vấn để lấy nhân viên theo phòng ban
+        $placeholders = implode(',', array_fill(0, count($departments), '?')); // Tạo các dấu ? để chuẩn bị câu lệnh
+        $query = "SELECT id, FullName FROM user WHERE DepartmentID IN ($placeholders) AND Status = 'active'";
+        
+        // Chuẩn bị và thực thi câu lệnh
+        $stmt = $conn->prepare($query);
+        $stmt->execute($departments);
+        $employees = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        // Trả danh sách nhân viên dưới dạng các thẻ <option>
+        if (!empty($employees)) {
+            foreach ($employees as $employee) {
+                echo "<option value='{$employee['id']}'>{$employee['FullName']}</option>";
+            }
+        } else {
+            echo "<option value=''>Không tìm thấy nhân viên nào</option>";
+        }
+    } else {
+        echo "<option value=''>Chưa chọn phòng ban</option>";
+    }
+    
+}
+

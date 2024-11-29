@@ -86,7 +86,7 @@ while ($user = $stmt->fetch(PDO::FETCH_ASSOC)) {
     }
 
     // Ghi log kết quả gửi email chỉ nếu message không rỗng
-    if (!empty($message)) {
-        file_put_contents($logFile, date('Y-m-d H:i:s') . " - $message\n", FILE_APPEND);
-    }
+    // if (!empty($message)) {
+    //     file_put_contents($logFile, date('Y-m-d H:i:s') . " - $message\n", FILE_APPEND);
+    // }
 }

@@ -1,0 +1,15 @@
+<?php
+require '../config.php';
+
+header('Content-Type: application/json');
+
+try {
+    $stmt = $conn->prepare("SELECT id, DepartmentName FROM department"); // Giả sử bảng là 'departments'
+    $stmt->execute();
+    
+    $departments = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    echo json_encode($departments);
+} catch (PDOException $e) {
+    echo json_encode([]);
+}
+?>
