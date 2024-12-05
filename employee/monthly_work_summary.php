@@ -159,6 +159,20 @@ include "../config.php";
             /* Màu xám */
             color: #fff;
         }
+
+        .badge {
+            font-weight: bold;
+            /* Làm cho chữ đậm hơn */
+            padding: 0.5em 1em;
+            /* Thêm khoảng cách xung quanh chữ */
+            border-radius: 0.5em;
+            /* Bo tròn các góc */
+        }
+
+        .badge:hover {
+            transform: scale(1.1);
+            /* Phóng to khi hover */
+        }
     </style>
 </head>
 
@@ -297,13 +311,13 @@ include "../config.php";
                                                 <?php
                                                 switch ($row['Status']) {
                                                     case 'Valid':
-                                                        echo "<span class='badge bg-success'>Valid</span>";
+                                                        echo "<span class='badge bg-success text-white'>Valid</span>"; // Màu xanh cho Valid
                                                         break;
                                                     case 'Invalid':
-                                                        echo "<span class='badge bg-danger'>Invalid</span>";
+                                                        echo "<span class='badge bg-danger text-white'>Invalid</span>"; // Màu đỏ cho Invalid
                                                         break;
                                                     default:
-                                                        echo "<span class='badge bg-warning'>Pending</span>";
+                                                        echo "<span class='badge bg-warning text-dark'>Pending</span>"; // Màu vàng cho Pending
                                                 }
                                                 ?>
                                             </td>

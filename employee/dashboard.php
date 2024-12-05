@@ -52,10 +52,12 @@ if (isset($_POST['checkin'])) {
             'status' => $status
         ]);
 
-        // Nếu check-in không hợp lệ, yêu cầu giải trình
+        // Store reason if check-in is invalid
         if ($status == "Invalid") {
-            $_SESSION['errorMessage'] = "Invalid check-in. Please provide a reason by clicking the Check-in button below.";
-            $_SESSION['attendance_id'] = $conn->lastInsertId(); // Lưu lại ID để sử dụng trong form lý do
+            $_SESSION['errorMessage'] = "Invalid check-in. Please provide a reason.";
+            $_SESSION['attendance_id'] = $conn->lastInsertId(); // Store ID for reason form
+            $showReasonForm = true; // Set a flag to show reason form
+            $actionType = 'checkin'; // Set action type to checkin
         } else {
             $_SESSION['successMessage'] = "Check-in successfully!";
             header("Location: dashboard.php");
@@ -74,7 +76,7 @@ if (isset($_POST['checkout'])) {
         $checkOutHour = (int)date('H', strtotime($checkOutTime));
 
         // Cập nhật thời gian check-out
-        $stmt = $conn->prepare("UPDATE CheckInOut SET CheckOutTime = :checkOutTime WHERE Id = :id");
+        $stmt = $conn->prepare("UPDATE CheckInOut SET CheckOutTime = :checkOutTime, ActionType = 'checkout' WHERE Id = :id");
         $stmt->execute(['checkOutTime' => $checkOutTime, 'id' => $attendanceLog['Id']]);
 
         // Kiểm tra điều kiện thời gian check-in và check-out
@@ -85,13 +87,14 @@ if (isset($_POST['checkout'])) {
         $stmt = $conn->prepare("UPDATE CheckInOut SET status = :status WHERE Id = :id");
         $stmt->execute(['status' => $status, 'id' => $attendanceLog['Id']]);
 
-        // Nếu check-out không hợp lệ, yêu cầu giải trình
+        // Store reason if check-out is invalid
         if ($status == "Invalid") {
-            $_SESSION['errorMessage'] = "Invalid check-out. Please provide a reason by clicking the Check-out button again below.";
-            // Không chuyển hướng, sẽ hiển thị giao diện nhập lý do trên dashboard
+            $_SESSION['errorMessage'] = "Invalid check-out. Please provide a reason.";
+            $showReasonForm = true; // Set a flag to show reason form
+            $actionType = 'checkout'; // Set action type to checkout
         } else {
             $_SESSION['successMessage'] = "Check-out successfully!";
-            header("Location: dashboard.php"); // Chuyển hướng về dashboard
+            header("Location: dashboard.php");
             exit();
         }
     } else {
@@ -461,19 +464,19 @@ include "../config.php";
                                 <p><strong>Check-out Time:</strong> <?php echo $attendanceLog['CheckOutTime'] ? date('d-m-Y H:i:s', strtotime($attendanceLog['CheckOutTime'])) : " Not checked out"; ?></p>
                             </div>
 
-                            <?php if ($attendanceLog['status'] == 'Invalid'): ?>
+                            <?php if ($attendanceLog['status'] == 'Invalid' || isset($showReasonForm)): ?>
                                 <div class="invalid-reason">
-                                    <h5>Reason for Invalid Check-in/ Check-out:</h5>
+                                    <h5>Reason for Invalid <?php echo isset($actionType) && $actionType == 'checkin' ? 'Check-in' : 'Check-out'; ?>:</h5>
                                     <form id="reasonForm">
                                         <select id="reasonSelect" class="form-control" required>
                                             <option value="">Select a reason</option>
                                             <option value="Reason 1">Heavy traffic: Due to traffic jams or poor traffic conditions.</option>
                                             <option value="Reason 2">Personal problems: Having an urgent matter to attend to (e.g. family issues).</option>
                                             <option value="Reason 3">Illness: Due to poor health or illness.</option>
-                                            <option value="Reason 3">Doctor's appointment: Having an appointment that cannot be changed.</option>
-                                            <option value="Reason 3">Bad weather: Due to unfavorable weather (rainstorms, snow, etc.).</option>
-                                            <option value="Reason 3">Change in work schedule: There is an unexpected change in work schedule.</option>
-                                            <option value="Reason 3">Vehicle problems: Vehicle breaks down or is not usable.</option>
+                                            <option value="Reason 4">Doctor's appointment: Having an appointment that cannot be changed.</option>
+                                            <option value="Reason 5">Bad weather: Due to unfavorable weather (rainstorms, snow, etc.).</option>
+                                            <option value="Reason 6">Change in work schedule: There is an unexpected change in work schedule.</option>
+                                            <option value="Reason 7">Vehicle problems: Vehicle breaks down or is not usable.</option>
                                             <option value="other">Other reason</option>
                                         </select>
                                         <textarea name="reason" id="reason" class="form-control mt-3" rows="3" placeholder="Please provide the reason for invalid check-in/out" style="display:none;"></textarea>

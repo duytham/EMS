@@ -199,7 +199,7 @@ $departments = $conn->query("SELECT * FROM `Department`")->fetchAll(PDO::FETCH_A
                             <select class="form-control" id="salary_level_id" name="salary_level_id" required>
                                 <?php foreach ($salary_levels as $level): ?>
                                     <option value="<?= $level['id'] ?>" <?= $level['id'] == $user['salary_level_id'] ? 'selected' : '' ?>>
-                                        Level <?= $level['level'] ?> - <?= htmlspecialchars($level['alias']) ?> - Daily: <?= number_format($level['daily_salary'], 0, ',', '.') ?> VND
+                                        Level <?= $level['level'] ?> - <?= htmlspecialchars($level['alias']) ?> - Daily: <?= number_format($level['daily_salary'], 0, ',', '.') ?> VND - Monthly: <?= number_format($level['monthly_salary'], 0, ',', '.') ?> VND
                                     </option>
                                 <?php endforeach; ?>
                             </select>

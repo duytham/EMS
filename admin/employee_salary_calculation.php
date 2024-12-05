@@ -2,31 +2,129 @@
 session_start();
 // Include file cấu hình kết nối
 require_once '../config.php'; // Đường dẫn đến file config của bạn
-// Truy vấn lấy dữ liệu nhân viên cùng với thông tin phòng ban, mức lương, và nhật ký lương
+
+$employees = []; // Gán giá trị mặc định là một mảng rỗng.
+
+// Lấy tháng và năm hiện tại nếu không có dữ liệu từ form hoặc URL
+$month = isset($_GET['month']) ? (int)$_GET['month'] : date('m'); // Lấy tháng hiện tại (1-12)
+$year = isset($_GET['year']) ? (int)$_GET['year'] : date('Y');    // Lấy năm hiện tại (e.g., 2024)
+
+// Xử lý form nếu có dữ liệu POST
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['calculate_all_salaries'])) {
+    try {
+        $month = isset($_GET['month']) ? (int)$_GET['month'] : date('m');
+        $year = isset($_GET['year']) ? (int)$_GET['year'] : date('Y');
+
+        // Lấy danh sách nhân viên
+        $sql = "
+            SELECT 
+                u.Id AS employee_id,
+                u.EmploymentType,
+                COALESCE(SUM(ci.status = 'Valid'), 0) AS valid_days,
+                COALESCE(SUM(ci.status = 'Invalid'), 0) AS invalid_days,
+                COUNT(ci.Id) AS total_days,
+                s.monthly_salary AS monthly_salary, -- Sửa MonthlySalary thành monthly_salary
+                s.daily_salary AS daily_salary,     -- Sửa DailySalary thành daily_salary
+                u.salary_level_id
+            FROM user u
+            LEFT JOIN checkinout ci ON u.Id = ci.UserID AND MONTH(ci.LogDate) = :month AND YEAR(ci.LogDate) = :year
+            LEFT JOIN salary_levels s ON u.salary_level_id = s.id
+            WHERE u.RoleID = 2
+            GROUP BY u.Id;
+        ";
+
+        if (isset($sql) && !empty($sql)) {
+            $stmt = $conn->prepare($sql);
+            $stmt->execute([
+                ':month' => $month,
+                ':year' => $year
+            ]);
+        } else {
+            echo "Lỗi: Biến \$sql chưa được khởi tạo.";
+        }
+
+        // Bắt đầu tính lương và lưu vào salary_logs
+        $insertQuery = "
+            INSERT INTO salary_logs (employee_id, total_days, valid_days, invalid_days, month, year, total_salary, processed_by, processed_at, salary_level)
+            VALUES (:employee_id, :total_days, :valid_days, :invalid_days, :month, :year, :total_salary, :processed_by, NOW(), :salary_level)
+            ON DUPLICATE KEY UPDATE 
+                total_days = VALUES(total_days),
+                valid_days = VALUES(valid_days),
+                invalid_days = VALUES(invalid_days),
+                total_salary = VALUES(total_salary),
+                updated_by = :processed_by,
+                updated_at = NOW()
+        ";
+        $insertStmt = $conn->prepare($insertQuery);
+
+        foreach ($employees as $employee) {
+            $validDays = $employee['valid_days'];
+            $invalidDays = $employee['invalid_days'];
+            $totalDays = $employee['total_days'];
+            $salaryLevel = $employee['salary_level_id'];
+            $employmentType = $employee['EmploymentType'];
+
+            // Tính lương dựa trên loại nhân viên
+            $totalSalary = 0;
+            if ($employmentType === 'Full-time') {
+                $monthlySalary = $employee['MonthlySalary'];
+                $totalSalary = ($validDays / $totalDays) * $monthlySalary;
+            } elseif ($employmentType === 'Part-time') {
+                $dailySalary = $employee['DailySalary'];
+                $totalSalary = $validDays * $dailySalary;
+            }
+
+            // Lưu thông tin vào salary_logs
+            $insertStmt->execute([
+                ':employee_id' => $employee['employee_id'],
+                ':total_days' => $totalDays,
+                ':valid_days' => $validDays,
+                ':invalid_days' => $invalidDays,
+                ':month' => $month,
+                ':year' => $year,
+                ':total_salary' => $totalSalary,
+                ':processed_by' => $_SESSION['user_id'], // Lấy ID của người xử lý từ session
+                ':salary_level' => $salaryLevel,
+            ]);
+        }
+
+        $successMessage = "Calculate the salary of all employees successfully!";
+    } catch (Exception $e) {
+        $errorMessage = "An error occurred while calculating the salary: " . $e->getMessage();
+    }
+}
+
+// Truy vấn dữ liệu nhân viên và lương theo bộ lọc
 $sql = "
     SELECT 
-    u.Id AS employee_id,
-    u.FullName,
-    CONCAT(d.DepartmentName, ' - ', IFNULL(d2.DepartmentName, 'No Parent')) AS Department,
-    COALESCE(sl.alias, 'No Level') AS SalaryLevel, -- Hiển thị alias thay vì level
-    COALESCE(SUM(sl_logs.valid_days + sl_logs.invalid_days), 0) AS total_work_days,
-    COALESCE(SUM(sl_logs.valid_days), 0) AS valid_days,
-    COALESCE(SUM(sl_logs.invalid_days), 0) AS invalid_days,
-    COALESCE(SUM(sl_logs.valid_days * sl.daily_salary), 0) AS total_daily_salary
-FROM user u
-LEFT JOIN department d ON u.DepartmentID = d.Id
-LEFT JOIN department d2 ON d.ParentDepartmentID = d2.Id
-LEFT JOIN salary_levels sl ON u.salary_level_id = sl.id
-LEFT JOIN salary_logs sl_logs ON u.Id = sl_logs.employee_id
-    AND sl_logs.month = MONTH(CURDATE())
-    AND sl_logs.year = YEAR(CURDATE())
-WHERE u.RoleID = 2 -- Chỉ hiển thị nhân viên
-GROUP BY u.Id, sl.alias
-ORDER BY u.FullName;
-
+        u.Id AS employee_id,
+        u.FullName,
+        CONCAT(d.DepartmentName, ' - ', IFNULL(d2.DepartmentName, 'No Parent')) AS Department,
+        COALESCE(sl.alias, 'No Level') AS SalaryLevel,
+        COALESCE(SUM(CASE WHEN c.status = 'Valid' THEN 1 ELSE 0 END), 0) AS valid_days,
+        COALESCE(SUM(CASE WHEN c.status = 'Invalid' THEN 1 ELSE 0 END), 0) AS invalid_days,
+        COALESCE(SUM(CASE WHEN c.status IN ('Valid', 'Invalid') THEN 1 ELSE 0 END), 0) AS total_work_days,
+        COALESCE(SUM(CASE WHEN c.status = 'Valid' THEN sl.daily_salary ELSE 0 END), 0) AS total_daily_salary,
+        CASE 
+            WHEN u.EmploymentType = 'full-time' THEN 'Full-Time'
+            WHEN u.EmploymentType = 'part-time' THEN 'Part-Time'
+            ELSE 'Unknown'
+        END AS EmploymentType
+    FROM user u
+    LEFT JOIN department d ON u.DepartmentID = d.Id
+    LEFT JOIN department d2 ON d.ParentDepartmentID = d2.Id
+    LEFT JOIN salary_levels sl ON u.salary_level_id = sl.id
+    LEFT JOIN checkinout c ON u.Id = c.UserID
+        AND MONTH(c.LogDate) = :month
+        AND YEAR(c.LogDate) = :year
+    WHERE u.RoleID = 2 -- Chỉ hiển thị nhân viên
+    GROUP BY u.Id, sl.alias
+    ORDER BY u.FullName;
 ";
 
 $stmt = $conn->prepare($sql);
+$stmt->bindParam(':month', $month, PDO::PARAM_INT);
+$stmt->bindParam(':year', $year, PDO::PARAM_INT);
 $stmt->execute();
 $employees = $stmt->fetchAll(PDO::FETCH_ASSOC);
 ?>
@@ -41,7 +139,17 @@ $employees = $stmt->fetchAll(PDO::FETCH_ASSOC);
     <meta name="description" content="">
     <meta name="author" content="">
 
-    <title>Admin - EDMS - Employee's Salary</title>
+    <style>
+        .employment-full-time {
+            color: greenyellow;
+        }
+
+        .employment-part-time {
+            color: blue;
+        }
+    </style>
+
+    <title>Admin - EDMS - Employee's Salary Calculation</title>
 
     <link href="../vendor/fontawesome-free/css/all.min.css" rel="stylesheet" type="text/css">
     <link href="https://fonts.googleapis.com/css?family=Nunito:200,200i,300,300i,400,400i,600,600i,700,700i,800,800i,900,900i" rel="stylesheet">
@@ -75,6 +183,7 @@ $employees = $stmt->fetchAll(PDO::FETCH_ASSOC);
                         echo "<div class='alert alert-danger'>$errorMessage</div>";
                     }
                     ?>
+                    <?php echo "Month: $month, Year: $year"; ?>
 
                     <body>
                         <h1 class="h3 mb-2 text-gray-800">Employee Salary Calculation</h1>
@@ -84,17 +193,44 @@ $employees = $stmt->fetchAll(PDO::FETCH_ASSOC);
                             <p><?= $statusMessage ?></p>
                         <?php endif; ?>
 
-                        <form method="POST" action="">
-                            <button type="submit" name="calculate_salary" class="btn btn-warning mr-2">
-                                <i class="fas fa-sync-alt"></i> Recalculate
-                            </button>
-                            <!-- <button type="submit" name="save_salary" class="btn btn-success">
-                                <i class="fas fa-save"></i> Save
-                            </button> Nút lưu trữ tính lương -->
-                        </form>
-                        <a href="calculate_salary.php" class="btn btn-primary mb-3">Tính lương</a>
+                        <div class="d-flex mb-3">
+                            <form method="POST" action="" class="mr-2">
+                                <button type="submit" name="calculate_salary" class="btn btn-warning">
+                                    <i class="fas fa-sync-alt"></i> Recalculate
+                                </button>
+                            </form>
+
+                            <a href="calculate_salary.php" class="btn btn-primary mr-2">Calculate salary</a>
+
+                            <form method="POST" action="">
+                                <button type="submit" name="calculate_all_salaries" class="btn btn-success">
+                                    <i class="fas fa-calculator"></i> Calculate salary for all employees
+                                </button>
+                            </form>
+                        </div>
                         <!-- <form method="POST" action="">
                         </form> -->
+
+                        <!-- Form lọc theo tháng và năm -->
+                        <form method="GET" action="employee_salary_calculation.php" class="mb-3">
+                            <label for="month">Month:</label>
+                            <select id="month" name="month" class="form-control" style="width: auto; display: inline-block;">
+                                <?php for ($i = 1; $i <= 12; $i++): ?>
+                                    <option value="<?= $i ?>" <?= ($i == $month) ? 'selected' : '' ?>>
+                                        <?= str_pad($i, 2, '0', STR_PAD_LEFT) ?> <!-- Hiển thị 01, 02... -->
+                                    </option>
+                                <?php endfor; ?>
+                            </select>
+
+                            <label for="year">Year:</label>
+                            <select id="year" name="year" class="form-control" style="width: auto; display: inline-block;">
+                                <?php for ($i = date('Y') - 5; $i <= date('Y') + 1; $i++): ?>
+                                    <option value="<?= $i ?>" <?= ($i == $year) ? 'selected' : '' ?>><?= $i ?></option>
+                                <?php endfor; ?>
+                            </select>
+
+                            <button type="submit" class="btn btn-primary">Filter</button>
+                        </form>
 
                         <div class="card shadow mb-4">
                             <div class="card-header py-3">
@@ -108,6 +244,7 @@ $employees = $stmt->fetchAll(PDO::FETCH_ASSOC);
                                                     <th>Full Name</th>
                                                     <th>Department</th>
                                                     <th>Salary Level</th>
+                                                    <th>Employment Type</th> <!-- Thêm cột Employment Type -->
                                                     <th>Total Work Days</th> <!-- Thêm cột mới -->
                                                     <th>Valid Days</th>
                                                     <th>Invaild Days</th>
@@ -122,12 +259,22 @@ $employees = $stmt->fetchAll(PDO::FETCH_ASSOC);
                                                         <td><?= $employee['FullName'] ?></td>
                                                         <td><?= $employee['Department'] ?></td>
                                                         <td><?= $employee['SalaryLevel'] ?></td>
-                                                        <td><?= $employee['total_work_days'] ?></td>
-                                                        <td><?= $employee['valid_days'] ?></td>
-                                                        <td><?= $employee['invalid_days'] ?></td>
-                                                        <td><?= number_format($employee['total_daily_salary'], 0, ',', '.') . ' đ' ?></td> <!-- Định dạng lương ngày -->
+                                                        <td>
+                                                            <?php if ($employee['EmploymentType'] === 'Full-Time'): ?>
+                                                                <span class="employment-full-time"><?= $employee['EmploymentType'] ?></span>
+                                                            <?php elseif ($employee['EmploymentType'] === 'Part-Time'): ?>
+                                                                <span class="employment-part-time"><?= $employee['EmploymentType'] ?></span>
+                                                            <?php else: ?>
+                                                                <span><?= $employee['EmploymentType'] ?></span>
+                                                            <?php endif; ?>
+                                                        </td>
+                                                        <td><?= $employee['total_work_days'] ?? 0 ?></td>
+                                                        <td><?= $employee['valid_days'] ?? 0 ?></td>
+                                                        <td><?= $employee['invalid_days'] ?? 0 ?></td>
+                                                        <td><?= number_format($employee['total_daily_salary'], 0, ',', '.') . ' đ' ?></td>
                                                     </tr>
                                                 <?php endforeach; ?>
+
                                             </tbody>
                                         </table>
                                     </div>

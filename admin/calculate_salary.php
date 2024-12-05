@@ -2,7 +2,7 @@
 // Kết nối với cơ sở dữ liệu
 session_start(); // Bắt đầu phiên
 require_once '../config.php';  // Sử dụng file config.php với PDO
-// include 'salary_functions.php'; // Bao gồm file chứa các hàm SQL
+//include 'salary_functions.php'; // Bao gồm file chứa các hàm SQL
 
 // Lấy danh sách phòng ban
 $departments = $conn->query("SELECT Id, DepartmentName FROM department")->fetchAll(PDO::FETCH_ASSOC);
@@ -142,8 +142,6 @@ include "../config.php";
                                     </div>
                                 </div>
                             </form>
-
-
                         </div>
                         <!-- End of Content Wrapper -->
                     </div>
@@ -211,8 +209,8 @@ include "../config.php";
                                 const employeeItem = document.createElement('div');
                                 employeeItem.classList.add('employee-item', 'mb-2');
                                 employeeItem.innerHTML = `
-                        <button class="btn btn-link" data-id="${employee.Id}">${employee.FullName}</button>
-                    `;
+                                    <button class="employee-button" data-id="${employee.Id}">${employee.FullName}</button>
+                                `;
                                 employeeList.appendChild(employeeItem);
                             });
                         })
@@ -247,6 +245,8 @@ include "../config.php";
                             })
                             .then(response => response.json())
                             .then(data => {
+                                console.log(data); // Debug 
+                                const employeeList = document.getElementById('employee-list');
                                 // Lưu dữ liệu vào đối tượng tạm thời
                                 salaryData[selectedEmployeeId] = data;
 
@@ -282,6 +282,7 @@ include "../config.php";
 
                 // Hiển thị thông tin ngày lương và định dạng số
                 salaryDetails.innerHTML = `
+                    <li class="list-group-item">Employment Type: ${data.employment_type === 'full-time' ? 'Full-time' : 'Part-time'}</li>
                     <li class="list-group-item">Salary Level: ${data.salary_level}</li>
                     <li class="list-group-item">Total Work Days: ${data.total_days}</li>
                     <li class="list-group-item">Valid Days: ${data.valid_days}</li>

@@ -12,6 +12,8 @@ if (isset($_GET['employee_id']) && isset($_GET['month']) && isset($_GET['year'])
         u.FullName, 
         sl.alias AS SalaryAlias, 
         sl.daily_salary AS DailySalary,
+        sl.monthly_salary AS MonthlySalary,
+        u.EmploymentType,
 
         -- Ngày công hợp lệ (status = 'Valid')
         COUNT(CASE 
@@ -27,39 +29,29 @@ if (isset($_GET['employee_id']) && isset($_GET['month']) && isset($_GET['year'])
             ELSE NULL 
         END) AS InvalidDays,
 
-        -- Tổng số ngày làm việc (số lần checkin của nhân viên)
-        COUNT(c.Id) AS TotalDaysWorked,
+        -- Tổng số ngày trong tháng
+        DAY(LAST_DAY(STR_TO_DATE(CONCAT(:year, '-', :month, '-01'), '%Y-%m-%d'))) AS TotalDaysInMonth,
 
-        -- Tính tổng lương theo ngày công hợp lệ (lương ngày hợp lệ = daily_salary)
-        COUNT(CASE 
-            WHEN c.status = 'Valid' 
-            THEN 1 
-            ELSE NULL 
-        END) * sl.daily_salary AS TotalValidDaysSalary,
-
-        -- Tính tổng lương ngày công không hợp lệ (50% lương ngày)
-        COUNT(CASE 
-            WHEN c.status = 'Invalid' 
-            THEN 1 
-            ELSE NULL 
-        END) * (0.5 * sl.daily_salary) AS TotalInvalidDaysSalary,
-
-        -- Tính tổng lương nhận được
-        ROUND(
-            (COUNT(CASE 
-                WHEN c.status = 'Valid' 
-                THEN 1 
-                ELSE NULL 
-            END) * sl.daily_salary) + 
-            
-            (COUNT(CASE 
-                WHEN c.status = 'Invalid' 
-                THEN 1 
-                ELSE NULL 
-            END) * (0.5 * sl.daily_salary)),
-            2
-        ) AS CalculatedSalary
-
+        -- Lương hợp lệ
+        CASE 
+            WHEN u.EmploymentType = 'full-time' THEN 
+                ROUND(
+                    (COUNT(CASE 
+                        WHEN c.status = 'Valid' THEN 1 ELSE NULL 
+                    END) / DAY(LAST_DAY(STR_TO_DATE(CONCAT(:year, '-', :month, '-01'), '%Y-%m-%d')))
+                    ) * sl.monthly_salary, 2
+                )
+            WHEN u.EmploymentType = 'part-time' THEN
+                ROUND(
+                    (COUNT(CASE 
+                        WHEN c.status = 'Valid' THEN 1 ELSE NULL 
+                    END) * sl.daily_salary) +
+                    (COUNT(CASE 
+                        WHEN c.status = 'Invalid' THEN 1 ELSE NULL 
+                    END) * (0.5 * sl.daily_salary)), 2
+                )
+            ELSE 0
+        END AS CalculatedSalary
     FROM `User` u
     LEFT JOIN `checkinout` c 
         ON u.Id = c.UserID 
@@ -68,8 +60,9 @@ if (isset($_GET['employee_id']) && isset($_GET['month']) && isset($_GET['year'])
     LEFT JOIN `salary_levels` sl 
         ON u.salary_level_id = sl.id
     WHERE u.Id = :employee_id
-    GROUP BY u.Id, u.FullName, sl.alias, sl.daily_salary
+    GROUP BY u.Id, u.FullName, sl.alias, sl.daily_salary, sl.monthly_salary, u.EmploymentType
     ";
+$stmt = $this->db->prepare($sql);
 
     try {
         $stmt = $conn->prepare($sql);

@@ -9,9 +9,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     // Loại bỏ dấu phân cách hàng nghìn
     $daily_salary = str_replace('.', '', $_POST['daily_salary']);
+    $monthly_salary = str_replace('.', '', $_POST['monthly_salary']);
 
-    // Kiểm tra xem giá trị có phải là số và không âm
-    if (!is_numeric($daily_salary) || $daily_salary < 0) {
+    // Kiểm tra giá trị phải là số và không âm
+    if (!is_numeric($daily_salary) || $daily_salary < 0 || !is_numeric($monthly_salary) || $monthly_salary < 0) {
         die("Invalid salary value. Please try again.");
     }
 
@@ -37,13 +38,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if ($id) {
         // Cập nhật mức lương hiện có
-        $stmt = $conn->prepare("UPDATE salary_levels SET level = ?, alias = ?, daily_salary = ? WHERE id = ?");
-        $stmt->execute([$level, $alias, $daily_salary, $id]);
+        $stmt = $conn->prepare("UPDATE salary_levels SET level = ?, alias = ?, daily_salary = ?, monthly_salary = ? WHERE id = ?");
+        $stmt->execute([$level, $alias, $daily_salary, $monthly_salary, $id]);
         $_SESSION['message'] = "Successfully updated the salary grade coefficient.";
     } else {
         // Thêm mức lương mới
-        $stmt = $conn->prepare("INSERT INTO salary_levels (level, alias, daily_salary) VALUES (?, ?, ?)");
-        $stmt->execute([$level, $alias, $daily_salary]);
+        $stmt = $conn->prepare("INSERT INTO salary_levels (level, alias, daily_salary, monthly_salary) VALUES (?, ?, ?, ?)");
+        $stmt->execute([$level, $alias, $daily_salary, $monthly_salary]);
         $_SESSION['message'] = "Successfully added the salary grade coefficient.";
     }
 
@@ -116,15 +117,19 @@ $salary_levels = $stmt->fetchAll(PDO::FETCH_ASSOC);
                             <form action="manage_salary_levels.php" method="POST" class="mb-4">
                                 <input type="hidden" id="id" name="id"> <!-- Thêm trường ẩn cho ID -->
                                 <div class="form-row">
-                                    <div class="form-group col-md-4">
+                                    <div class="form-group col-md-3">
                                         <label for="level">Level:</label>
                                         <input type="number" class="form-control" id="level" name="level" required placeholder="Enter salary level">
                                     </div>
-                                    <div class="form-group col-md-4">
+                                    <div class="form-group col-md-3">
                                         <label for="alias">Alias:</label>
                                         <input type="text" class="form-control" id="alias" name="alias" required placeholder="Enter unique alias">
                                     </div>
-                                    <div class="form-group col-md-4">
+                                    <div class="form-group col-md-3">
+                                        <label for="monthly_salary">Monthly Salary:</label>
+                                        <input type="text" class="form-control" id="monthly_salary" name="monthly_salary" required placeholder="Enter monthly salary" oninput="formatNumber(this)">
+                                    </div>
+                                    <div class="form-group col-md-3">
                                         <label for="daily_salary">Daily Salary:</label>
                                         <input type="text" class="form-control" id="daily_salary" name="daily_salary" required placeholder="Enter daily salary" oninput="formatNumber(this)">
                                     </div>
@@ -147,6 +152,7 @@ $salary_levels = $stmt->fetchAll(PDO::FETCH_ASSOC);
                                             <th>ID</th>
                                             <th>Level</th>
                                             <th>Alias</th> <!-- Cột Alias mới -->
+                                            <th>Monthly Salary</th>
                                             <th>Daily Salary</th>
                                             <th>Actions</th>
                                         </tr>
@@ -157,6 +163,7 @@ $salary_levels = $stmt->fetchAll(PDO::FETCH_ASSOC);
                                                 <td><?= htmlspecialchars($level['id']) ?></td>
                                                 <td><?= htmlspecialchars($level['level']) ?></td>
                                                 <td><?= htmlspecialchars($level['alias']) ?></td> <!-- Hiển thị Alias -->
+                                                <td><?= htmlspecialchars(number_format($level['monthly_salary'], 0, ',', '.')) . ' đ' ?></td>
                                                 <td><?= htmlspecialchars(number_format($level['daily_salary'], 0, ',', '.')) . ' đ' ?></td>
                                                 <td>
                                                     <button class="btn btn-warning btn-sm" onclick="editSalaryLevel(<?= htmlspecialchars(json_encode($level)) ?>)">Edit</button>
@@ -169,11 +176,13 @@ $salary_levels = $stmt->fetchAll(PDO::FETCH_ASSOC);
                             </div>
                             <script>
                                 function editSalaryLevel(level) {
-                                    document.getElementById('id').value = level.id; // Nếu bạn có trường ẩn cho ID
+                                    document.getElementById('id').value = level.id;
                                     document.getElementById('level').value = level.level;
-                                    document.getElementById('alias').value = level.alias; // Thêm dòng này
+                                    document.getElementById('alias').value = level.alias;
                                     document.getElementById('daily_salary').value = formatNumberForEdit(level.daily_salary);
+                                    document.getElementById('monthly_salary').value = formatNumberForEdit(level.monthly_salary); // Thêm dòng này
                                 }
+
 
                                 function formatNumber(input) {
                                     // Remove all non-digit characters
