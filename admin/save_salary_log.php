@@ -1,78 +1,59 @@
 <?php
-// Kết nối cơ sở dữ liệu
 include '../config.php';
 
-// Lấy dữ liệu từ request
-$employeeId = $_POST['employee_id'];
-$salaryLevel = $_POST['salary_level'];
-$totalDays = $_POST['total_days'];
-$validDays = $_POST['valid_days'];
-$invalidDays = $_POST['invalid_days'];
-$totalSalary = $_POST['total_salary']; // '96850000 đ'
-$month = $_POST['month'];
-$year = $_POST['year'];
+// Kiểm tra dữ liệu từ POST
+if (isset($_POST['employee_id'], $_POST['total_days'], $_POST['valid_days'], $_POST['invalid_days'], $_POST['total_salary'], $_POST['month'], $_POST['year'])) {
+    // Lấy dữ liệu từ POST
+    $employee_id = $_POST['employee_id'];
+    $total_days = $_POST['total_days']; // Đây sẽ là tổng số ngày làm việc
+    $valid_days = $_POST['valid_days'];
+    $invalid_days = $_POST['invalid_days'];
+    $total_salary = $_POST['total_salary'];
+    $total_salary = str_replace('.', '', $_POST['total_salary']); // Xóa dấu chấm
+$total_salary = str_replace(',', '.', $total_salary); // Thay thế dấu phẩy bằng dấu chấm
+    $month = $_POST['month'];
+    $year = $_POST['year'];
 
-// Loại bỏ ký tự ' đ' trong giá trị total_salary và chuyển thành số
-$totalSalary = str_replace(' đ', '', $totalSalary);
-$totalSalary = (float) $totalSalary; // Chuyển thành kiểu số để lưu vào cơ sở dữ liệu
-
-// Kiểm tra giá trị total_days, valid_days và invalid_days để đảm bảo chúng là số nguyên
-$totalDays = (int) $totalDays;
-$validDays = (int) $validDays;
-$invalidDays = (int) $invalidDays;
-
-// Kiểm tra xem nhân viên đã có trong bảng salary_logs chưa
-$sql = "SELECT * FROM salary_logs WHERE employee_id = :employee_id AND month = :month AND year = :year";
-$stmt = $conn->prepare($sql);
-$stmt->execute([
-    ':employee_id' => $employeeId,
-    ':month' => $month,
-    ':year' => $year
-]);
-
-$existingRecord = $stmt->fetch(PDO::FETCH_ASSOC);
-
-if ($existingRecord) {
-    // Nếu đã có, thực hiện UPDATE
-    $sql = "UPDATE salary_logs SET salary_level = :salary_level, total_days = :total_days, valid_days = :valid_days, invalid_days = :invalid_days, total_salary = :total_salary WHERE employee_id = :employee_id AND month = :month AND year = :year";
-    $stmt = $conn->prepare($sql);
-    $stmt->execute([
-        ':salary_level' => $salaryLevel,
-        ':total_days' => $totalDays,
-        ':valid_days' => $validDays,
-        ':invalid_days' => $invalidDays,
-        ':total_salary' => $totalSalary,
-        ':employee_id' => $employeeId,
-        ':month' => $month,
-        ':year' => $year
-    ]);
-    echo json_encode(['success' => true]);
-} else {
-    // Nếu chưa có, thực hiện INSERT
-    $sql = "SELECT EmploymentType FROM user WHERE Id = :employee_id";
-    $stmt = $conn->prepare($sql);
-    $stmt->execute([':employee_id' => $employeeId]);
-    $employmentType = $stmt->fetchColumn();
-
-    if ($employmentType === 'full-time') {
-        $salaryFormula = "((:valid_days / :total_days) * :monthly_salary)";
-    } else { // part-time
-        $salaryFormula = "(:valid_days * :daily_salary) + (:invalid_days * :daily_salary * 0.5)";
+    // Kiểm tra tổng số ngày không phải 0
+    if ($total_days == 0) {
+        echo json_encode(['success' => false, 'message' => 'Tổng số ngày làm việc không thể bằng 0.']);
+        exit;
     }
 
-    $sql = "INSERT INTO salary_logs (employee_id, salary_level, total_days, valid_days, invalid_days, total_salary, month, year) 
-    VALUES (:employee_id, :salary_level, :total_days, :valid_days, :invalid_days, $salaryFormula, :month, :year)";
-    $stmt = $conn->prepare($sql);
-    $stmt->execute([
-        ':employee_id' => $employeeId,
-        ':salary_level' => $salaryLevel,
-        ':total_days' => $totalDays,
-        ':valid_days' => $validDays,
-        ':invalid_days' => $invalidDays,
-        ':daily_salary' => $dailySalary,
-        ':monthly_salary' => $monthlySalary,
-        ':month' => $month,
-        ':year' => $year
-    ]);
-    echo json_encode(['success' => true]);
+    // Kiểm tra xem người dùng đã có dữ liệu lương trong tháng này chưa
+    $stmt = $conn->prepare("SELECT * FROM salary_logs WHERE employee_id = :employee_id AND month = :month AND year = :year");
+    $stmt->bindParam(':employee_id', $employee_id);
+    $stmt->bindParam(':month', $month);
+    $stmt->bindParam(':year', $year);
+    $stmt->execute();
+
+    if ($stmt->rowCount() > 0) {
+        // Nếu đã có bản ghi, thực hiện UPDATE
+        $stmt = $conn->prepare("UPDATE salary_logs SET total_days = :total_days, valid_days = :valid_days, invalid_days = :invalid_days, total_salary = :total_salary WHERE employee_id = :employee_id AND month = :month AND year = :year");
+        $stmt->bindParam(':employee_id', $employee_id);
+        $stmt->bindParam(':total_days', $total_days);
+        $stmt->bindParam(':valid_days', $valid_days);
+        $stmt->bindParam(':invalid_days', $invalid_days);
+        $stmt->bindParam(':total_salary', $total_salary);
+        $stmt->bindParam(':month', $month);
+        $stmt->bindParam(':year', $year);
+        $stmt->execute();
+        echo json_encode(['success' => true, 'message' => 'Salary info updated successfully.']);
+    } else {
+        // Nếu chưa có bản ghi, thực hiện INSERT
+        $stmt = $conn->prepare("INSERT INTO salary_logs (employee_id, total_days, valid_days, invalid_days, total_salary, month, year) VALUES (:employee_id, :total_days, :valid_days, :invalid_days, :total_salary, :month, :year)");
+        $stmt->bindParam(':employee_id', $employee_id);
+        $stmt->bindParam(':total_days', $total_days);
+        $stmt->bindParam(':valid_days', $valid_days);
+        $stmt->bindParam(':invalid_days', $invalid_days);
+        $stmt->bindParam(':total_salary', $total_salary);
+        $stmt->bindParam(':month', $month);
+        $stmt->bindParam(':year', $year);
+        $stmt->execute();
+        echo json_encode(['success' => true, 'message' => 'Salary info saved successfully.']);
+    }
+} else {
+    // Nếu thiếu dữ liệu, trả về lỗi
+    echo json_encode(['success' => false, 'message' => 'Missing required fields.']);
 }
+?>

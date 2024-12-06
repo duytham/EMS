@@ -12,36 +12,30 @@ $year = isset($_GET['year']) ? (int)$_GET['year'] : date('Y');    // Lấy năm 
 // Xử lý form nếu có dữ liệu POST
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['calculate_all_salaries'])) {
     try {
-        $month = isset($_GET['month']) ? (int)$_GET['month'] : date('m');
-        $year = isset($_GET['year']) ? (int)$_GET['year'] : date('Y');
-
         // Lấy danh sách nhân viên
         $sql = "
             SELECT 
                 u.Id AS employee_id,
                 u.EmploymentType,
-                COALESCE(SUM(ci.status = 'Valid'), 0) AS valid_days,
-                COALESCE(SUM(ci.status = 'Invalid'), 0) AS invalid_days,
-                COUNT(ci.Id) AS total_days,
-                s.monthly_salary AS monthly_salary, -- Sửa MonthlySalary thành monthly_salary
-                s.daily_salary AS daily_salary,     -- Sửa DailySalary thành daily_salary
+                COUNT(DISTINCT ci.LogDate) AS total_days,  -- Tính tổng số ngày làm việc trong tháng
+                SUM(CASE WHEN ci.status = 'Valid' THEN 1 ELSE 0 END) AS valid_days,   -- Tính số ngày hợp lệ
+                SUM(CASE WHEN ci.status = 'Invalid' THEN 1 ELSE 0 END) AS invalid_days, -- Tính số ngày không hợp lệ
+                s.monthly_salary AS monthly_salary,  -- Lương tháng
+                s.daily_salary AS daily_salary,     -- Lương ngày
                 u.salary_level_id
             FROM user u
             LEFT JOIN checkinout ci ON u.Id = ci.UserID AND MONTH(ci.LogDate) = :month AND YEAR(ci.LogDate) = :year
             LEFT JOIN salary_levels s ON u.salary_level_id = s.id
-            WHERE u.RoleID = 2
+            WHERE u.RoleID = 2  -- Chỉ lấy nhân viên (RoleID = 2)
             GROUP BY u.Id;
         ";
 
-        if (isset($sql) && !empty($sql)) {
-            $stmt = $conn->prepare($sql);
-            $stmt->execute([
-                ':month' => $month,
-                ':year' => $year
-            ]);
-        } else {
-            echo "Lỗi: Biến \$sql chưa được khởi tạo.";
-        }
+        $stmt = $conn->prepare($sql);
+        $stmt->execute([
+            ':month' => $month,
+            ':year' => $year
+        ]);
+        $employees = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
         // Bắt đầu tính lương và lưu vào salary_logs
         $insertQuery = "
@@ -67,12 +61,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['calculate_all_salarie
             // Tính lương dựa trên loại nhân viên
             $totalSalary = 0;
             if ($employmentType === 'Full-time') {
-                $monthlySalary = $employee['MonthlySalary'];
+                $monthlySalary = $employee['monthly_salary'];
                 $totalSalary = ($validDays / $totalDays) * $monthlySalary;
             } elseif ($employmentType === 'Part-time') {
-                $dailySalary = $employee['DailySalary'];
+                $dailySalary = $employee['daily_salary'];
                 $totalSalary = $validDays * $dailySalary;
             }
+
+            // Format the total salary to VND
+            $formattedSalary = number_format($totalSalary, 0, ',', '.');
 
             // Lưu thông tin vào salary_logs
             $insertStmt->execute([
@@ -101,10 +98,10 @@ $sql = "
         u.FullName,
         CONCAT(d.DepartmentName, ' - ', IFNULL(d2.DepartmentName, 'No Parent')) AS Department,
         COALESCE(sl.alias, 'No Level') AS SalaryLevel,
-        COALESCE(SUM(CASE WHEN c.status = 'Valid' THEN 1 ELSE 0 END), 0) AS valid_days,
-        COALESCE(SUM(CASE WHEN c.status = 'Invalid' THEN 1 ELSE 0 END), 0) AS invalid_days,
-        COALESCE(SUM(CASE WHEN c.status IN ('Valid', 'Invalid') THEN 1 ELSE 0 END), 0) AS total_work_days,
-        COALESCE(SUM(CASE WHEN c.status = 'Valid' THEN sl.daily_salary ELSE 0 END), 0) AS total_daily_salary,
+        COALESCE(s.total_days, 0) AS total_work_days,
+        COALESCE(s.valid_days, 0) AS valid_days,
+        COALESCE(s.invalid_days, 0) AS invalid_days,
+        COALESCE(s.total_salary, 0) AS SalaryReceived,
         CASE 
             WHEN u.EmploymentType = 'full-time' THEN 'Full-Time'
             WHEN u.EmploymentType = 'part-time' THEN 'Part-Time'
@@ -114,9 +111,9 @@ $sql = "
     LEFT JOIN department d ON u.DepartmentID = d.Id
     LEFT JOIN department d2 ON d.ParentDepartmentID = d2.Id
     LEFT JOIN salary_levels sl ON u.salary_level_id = sl.id
-    LEFT JOIN checkinout c ON u.Id = c.UserID
-        AND MONTH(c.LogDate) = :month
-        AND YEAR(c.LogDate) = :year
+    LEFT JOIN salary_logs s ON u.Id = s.employee_id
+        AND s.month = :month
+        AND s.year = :year
     WHERE u.RoleID = 2 -- Chỉ hiển thị nhân viên
     GROUP BY u.Id, sl.alias
     ORDER BY u.FullName;
@@ -203,7 +200,7 @@ $employees = $stmt->fetchAll(PDO::FETCH_ASSOC);
                             <a href="calculate_salary.php" class="btn btn-primary mr-2">Calculate salary</a>
 
                             <form method="POST" action="">
-                                <button type="submit" name="calculate_all_salaries" class="btn btn-success">
+                                <button type="submit" name="" class="btn btn-success">
                                     <i class="fas fa-calculator"></i> Calculate salary for all employees
                                 </button>
                             </form>
@@ -244,14 +241,13 @@ $employees = $stmt->fetchAll(PDO::FETCH_ASSOC);
                                                     <th>Full Name</th>
                                                     <th>Department</th>
                                                     <th>Salary Level</th>
-                                                    <th>Employment Type</th> <!-- Thêm cột Employment Type -->
-                                                    <th>Total Work Days</th> <!-- Thêm cột mới -->
+                                                    <th>Employment Type</th>
+                                                    <th>Total Work Days</th>
                                                     <th>Valid Days</th>
-                                                    <th>Invaild Days</th>
+                                                    <th>Invalid Days</th>
                                                     <th>Salary Received</th>
                                                 </tr>
                                             </thead>
-
                                             <tbody>
                                                 <?php foreach ($employees as $employee): ?>
                                                     <tr>
@@ -268,13 +264,12 @@ $employees = $stmt->fetchAll(PDO::FETCH_ASSOC);
                                                                 <span><?= $employee['EmploymentType'] ?></span>
                                                             <?php endif; ?>
                                                         </td>
-                                                        <td><?= $employee['total_work_days'] ?? 0 ?></td>
-                                                        <td><?= $employee['valid_days'] ?? 0 ?></td>
-                                                        <td><?= $employee['invalid_days'] ?? 0 ?></td>
-                                                        <td><?= number_format($employee['total_daily_salary'], 0, ',', '.') . ' đ' ?></td>
+                                                        <td><?= $employee['total_work_days'] ?></td>
+                                                        <td><?= $employee['valid_days'] ?></td>
+                                                        <td><?= $employee['invalid_days'] ?></td>
+                                                        <td><?= number_format($employee['SalaryReceived'], 0, ',', '.') ?> đ</td>
                                                     </tr>
                                                 <?php endforeach; ?>
-
                                             </tbody>
                                         </table>
                                     </div>

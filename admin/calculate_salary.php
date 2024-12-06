@@ -283,7 +283,6 @@ include "../config.php";
                 // Hiển thị thông tin ngày lương và định dạng số
                 salaryDetails.innerHTML = `
                     <li class="list-group-item">Employment Type: ${data.employment_type === 'full-time' ? 'Full-time' : 'Part-time'}</li>
-                    <li class="list-group-item">Salary Level: ${data.salary_level}</li>
                     <li class="list-group-item">Total Work Days: ${data.total_days}</li>
                     <li class="list-group-item">Valid Days: ${data.valid_days}</li>
                     <li class="list-group-item">Invalid Days: ${data.invalid_days}</li>
@@ -306,13 +305,13 @@ include "../config.php";
                 const invalidDays = document.getElementById('salary-details').children[3].textContent.split(': ')[1];
                 const totalSalary = document.getElementById('salary-details').children[4].textContent.split(': ')[1];
 
+                //totalSalary = totalSalary.replace(',', '.'); // Chuyển dấu phẩy thành dấu chấm
                 // Gửi yêu cầu AJAX để lưu thông tin lương vào cơ sở dữ liệu
                 fetch('save_salary_log.php', {
                         method: 'POST',
                         body: new URLSearchParams({
                             employee_id: selectedEmployeeId, // Sử dụng biến đã lưu
-                            salary_level: salaryLevel,
-                            total_days: totalDays,
+                            total_days: totalDays, // Thay vì gửi "QA2 - Monthly", gửi tổng số ngày
                             valid_days: validDays,
                             invalid_days: invalidDays,
                             total_salary: totalSalary,
