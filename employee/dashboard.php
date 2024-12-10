@@ -479,6 +479,7 @@ include "../config.php";
                                             <option value="Reason 7">Vehicle problems: Vehicle breaks down or is not usable.</option>
                                             <option value="other">Other reason</option>
                                         </select>
+
                                         <textarea name="reason" id="reason" class="form-control mt-3" rows="3" placeholder="Please provide the reason for invalid check-in/out" style="display:none;"></textarea>
                                         <input type="hidden" name="attendance_id" id="attendance_id" value="<?php echo $attendanceLog['Id']; ?>">
                                         <button type="submit" class="btn btn-warning mt-3">Submit Reason</button>
@@ -662,6 +663,32 @@ include "../config.php";
                     reasonTextarea.value = ''; // Clear the textarea if another option is selected
                 }
             });
+
+            window.onload = function() {
+                // Kiểm tra nếu form giải trình check-in hiển thị
+                if (document.getElementById("checkinReasonForm")) {
+                    document.getElementById("checkinButton").disabled = true; // Disable nút checkin
+                    document.getElementById("checkoutButton").disabled = true; // Disable nút checkout
+                }
+
+                // Kiểm tra nếu form giải trình check-out hiển thị
+                if (document.getElementById("checkoutReasonForm")) {
+                    document.getElementById("checkinButton").disabled = true; // Disable nút checkin
+                    document.getElementById("checkoutButton").disabled = true; // Disable nút checkout
+                }
+
+                // Hiển thị textarea khi chọn 'Other reason'
+                document.getElementById('reasonSelect').addEventListener('change', function() {
+                    var reasonSelect = document.getElementById('reasonSelect');
+                    var reasonTextarea = document.getElementById('reason');
+
+                    if (reasonSelect.value === 'other') {
+                        reasonTextarea.style.display = 'block';
+                    } else {
+                        reasonTextarea.style.display = 'none';
+                    }
+                });
+            };
         </script>
 </body>
 

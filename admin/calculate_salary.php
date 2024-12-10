@@ -108,6 +108,8 @@ include "../config.php";
                         <h1 class="h3 mb-2 text-gray-800">Salary Calculation</h1>
                         <p class="mb-4">Choose department first, the system will display the employees in that department to perform payroll</p>
 
+                        <a href="employee_salary_calculation.php" >Back to Employee Salary Calculation</a>
+
                         <div>
                             <!-- Form để chọn Department -->
                             <form id="salaryForm" class="mt-4">
