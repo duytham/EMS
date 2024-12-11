@@ -309,8 +309,9 @@ $chartData = [
                         </div>
 
                         <!-- Dropdown lọc phòng ban -->
+                        Select Department:
                         <select id="departmentFilter" class="form-control mb-3" onchange="updateValidInvalidDaysChart()">
-                            <option value="all">-- All Department --</option>
+                            <option value="all">All Department</option>
                             <?php foreach ($departments as $department): ?>
                                 <option value="<?php echo $department['DepartmentId']; ?>">
                                     <?php echo htmlspecialchars($department['DepartmentName']); ?>
@@ -320,23 +321,23 @@ $chartData = [
 
                         <!-- Cột bên phải: Biểu đồ có combobox -->
                         <div class="col-lg-12 col-md-12 mb-4">
-                            <div class="scrollable-content p-3" style="max-height: 600px; overflow-y: auto;">
+                            <div class="scrollable-content p-3" style="max-height: auto; max-width: auto"> <!-- Giảm chiều cao tối đa -->
                                 <!-- Biểu đồ số ngày công hợp lệ/không hợp lệ -->
                                 <h6 id="chartTitle" class="font-weight-bold text-gray-800">Number of valid/invalid working days</h6>
                                 <p>Statistical chart of valid/invalid days for each employee</p>
-                                <canvas id="validInvalidDaysChart"></canvas>
+                                <canvas id="validInvalidDaysChart" height="100"></canvas> <!-- Giảm kích thước canvas -->
 
                                 <!-- Biểu đồ hiệu suất làm việc -->
                                 <br></br>
                                 <h6 id="chartTitle" class="font-weight-bold text-gray-800">Work performance</h6>
                                 <p>Statistical chart of each employee's performance</p>
-                                <canvas id="performanceChart"></canvas>
+                                <canvas id="performanceChart" height="100"></canvas> <!-- Giảm kích thước canvas -->
 
                                 <!-- Biểu đồ tỷ lệ ngày công hợp lệ/không hợp lệ -->
                                 <br></br>
                                 <h6 id="chartTitle" class="font-weight-bold text-gray-800">Valid and invalid ratio</h6>
                                 <p>Statistical chart of the percentage of valid and invalid working days in the department.</p>
-                                <canvas id="validInvalidChart"></canvas>
+                                <canvas id="validInvalidChart" height="100"></canvas> <!-- Giảm kích thước canvas -->
                             </div>
                         </div>
                     </div>
@@ -626,7 +627,6 @@ $chartData = [
                 }
             });
         }
-
         // Gọi hàm để hiển thị biểu đồ ngay khi trang được tải
         updatePerformanceChart();
 
@@ -652,14 +652,14 @@ $chartData = [
                 data: {
                     labels: filteredData.map(user => user.FullName),
                     datasets: [{
-                            label: 'Ngày công hợp lệ (%)',
+                            label: 'Vaild Working Days (%)',
                             data: filteredData.map(user => (user.ValidDays / (user.ValidDays + user.InvalidDays)) * 100), // Tính tỷ lệ hợp lệ
                             backgroundColor: '#1cc88a', // Màu của thanh hợp lệ
                             borderColor: '#1cc88a', // Màu viền
                             borderWidth: 1
                         },
                         {
-                            label: 'Ngày công không hợp lệ (%)',
+                            label: 'Invaild working days (%)',
                             data: filteredData.map(user => (user.InvalidDays / (user.ValidDays + user.InvalidDays)) * 100), // Tính tỷ lệ không hợp lệ
                             backgroundColor: '#e74a3b', // Màu của thanh không hợp lệ
                             borderColor: '#e74a3b', // Màu viền
@@ -679,21 +679,20 @@ $chartData = [
                         x: {
                             title: {
                                 display: true,
-                                text: 'Tỷ lệ (%)'
+                                text: 'Percentage (%)'
                             },
                             beginAtZero: true
                         },
                         y: {
                             title: {
                                 display: true,
-                                text: 'Nhân viên'
+                                text: 'Employees'
                             }
                         }
                     }
                 }
             });
         }
-
         // Gọi hàm để hiển thị biểu đồ ngay khi trang được tải
         updateValidInvalidChart();
 
