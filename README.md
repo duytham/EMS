@@ -1,6 +1,6 @@
 # EMS
 
-EMS (Employee Management System) is a web application designed to manage employee data efficiently. This system is built using multiple programming languages including Hack, PHP, CSS, SCSS, and JavaScript.
+EMS (Employee Management System) is a web application designed to manage employee data efficiently. This system is built using PHP and other supporting technologies.
 
 ## Table of Contents
 - [Project Report](#project-report)
