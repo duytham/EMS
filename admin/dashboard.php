@@ -448,7 +448,7 @@ $chartData = [
                 }
             }
         });
-
+        
         /**
          * Biểu đồ cột cho độ tuổi và giới tính
          */

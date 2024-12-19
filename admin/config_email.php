@@ -1,4 +1,6 @@
 <?php
+require '../vendor/autoload.php'; // Nạp autoload của Composer
+
 $emailConfig = [
     'host' => 'smtp.gmail.com',
     'username' => 'duytham026@gmail.com', // Email gửi
@@ -32,7 +34,6 @@ function sendEmail($to, $subject, $body)
         $mail->isHTML(true);
         $mail->Subject = $subject;
         $mail->Body    = $body;
-
         $mail->AltBody = strip_tags($body);
 
         $mail->send();

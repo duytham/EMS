@@ -493,6 +493,8 @@ include "../config.php";
 
                 <div class="container mt-4 text-center">
                     <a href="monthly_work_summary.php">Go to Monthly Work Summary</a>
+                    <a href="leave_request_form.php">Create a Leave Request</a>
+
                 </div>
 
                 <div class="container mt-4">

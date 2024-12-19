@@ -41,6 +41,13 @@
     </li>
 
     <li class="nav-item">
+        <a class="nav-link" href="./view_leave_request.php">
+            <i class=""></i>
+            <span>Leave Requests</span>
+        </a>
+    </li>
+
+    <li class="nav-item">
         <a class="nav-link" href="./manage_salary_levels.php">
             <i class=""></i>
             <span>Salary Levels</span>

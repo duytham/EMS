@@ -1,0 +1,41 @@
+<?php
+session_start();
+include '../config.php';
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $userId = $_SESSION['user_id']; // Lấy User ID từ session
+    $leaveStart = $_POST['leave_start'];
+    $leaveEnd = $_POST['leave_end'];
+    $reason = $_POST['reason'];
+
+    // Tính số ngày nghỉ
+    $startDate = new DateTime($leaveStart);
+    $endDate = new DateTime($leaveEnd);
+    $interval = $startDate->diff($endDate)->days + 1;
+
+    // Kiểm tra số ngày nghỉ còn lại
+    $stmt = $conn->prepare("SELECT MaxLeaveDays, UsedLeaveDays FROM LeaveConfig WHERE UserId = ?");
+    $stmt->execute([$userId]);
+    $leaveConfig = $stmt->fetch(PDO::FETCH_ASSOC);
+
+    if (!$leaveConfig) {
+        echo "Cấu hình ngày nghỉ phép không tồn tại.";
+        exit;
+    }
+
+    if ($interval + $leaveConfig['UsedLeaveDays'] > $leaveConfig['MaxLeaveDays']) {
+        echo "Số ngày nghỉ phép vượt quá giới hạn.";
+        exit;
+    }
+
+    // Tạo đơn nghỉ phép
+    $stmt = $conn->prepare("INSERT INTO LeaveRequest (UserId, LeaveDateStart, LeaveDateEnd, Reason) VALUES (?, ?, ?, ?)");
+    $stmt->execute([$userId, $leaveStart, $leaveEnd, $reason]);
+
+    // Cập nhật số ngày nghỉ đã sử dụng
+    $stmt = $conn->prepare("UPDATE LeaveConfig SET UsedLeaveDays = UsedLeaveDays + ? WHERE UserId = ?");
+    $stmt->execute([$interval, $userId]);
+
+    echo "Đơn nghỉ phép được tạo thành công.";
+}
+?>
