@@ -75,6 +75,16 @@ $sqlPerformance = "
 $performanceStmt = $conn->query($sqlPerformance);
 $performanceData = $performanceStmt->fetchAll(PDO::FETCH_ASSOC);
 
+// Sắp xếp dữ liệu số ngày công hợp lệ/không hợp lệ theo số ngày công hợp lệ giảm dần
+usort($validInvalidDaysData, function ($a, $b) {
+    return $b['ValidDays'] - $a['ValidDays'];
+});
+
+// Sắp xếp dữ liệu hiệu suất làm việc theo hiệu suất giảm dần
+usort($performanceData, function ($a, $b) {
+    return $b['Performance'] - $a['Performance'];
+});
+
 // Đưa dữ liệu về định dạng JSON để sử dụng trên frontend
 $chartData = [
     "employeeRatio" => $employeeRatioData,
@@ -324,19 +334,19 @@ $chartData = [
                             <div class="scrollable-content p-3" style="max-height: auto; max-width: auto"> <!-- Giảm chiều cao tối đa -->
                                 <!-- Biểu đồ số ngày công hợp lệ/không hợp lệ -->
                                 <h6 id="chartTitle" class="font-weight-bold text-gray-800">Number of valid/invalid working days</h6>
-                                <p>Statistical chart of valid/invalid days for each employee</p>
+                                <p>Statistical chart of valid/invalid days for each employee - Descending sort</p>
                                 <canvas id="validInvalidDaysChart" height="100"></canvas> <!-- Giảm kích thước canvas -->
 
                                 <!-- Biểu đồ hiệu suất làm việc -->
                                 <br></br>
                                 <h6 id="chartTitle" class="font-weight-bold text-gray-800">Work performance</h6>
-                                <p>Statistical chart of each employee's performance</p>
+                                <p>Statistical chart of each employee's performance - Descending sort</p>
                                 <canvas id="performanceChart" height="100"></canvas> <!-- Giảm kích thước canvas -->
 
                                 <!-- Biểu đồ tỷ lệ ngày công hợp lệ/không hợp lệ -->
                                 <br></br>
                                 <h6 id="chartTitle" class="font-weight-bold text-gray-800">Valid and invalid ratio</h6>
-                                <p>Statistical chart of the percentage of valid and invalid working days in the department.</p>
+                                <p>Statistical chart of the percentage of valid and invalid working days in the department - Descending sort</p>
                                 <canvas id="validInvalidChart" height="100"></canvas> <!-- Giảm kích thước canvas -->
                             </div>
                         </div>
@@ -448,7 +458,7 @@ $chartData = [
                 }
             }
         });
-        
+
         /**
          * Biểu đồ cột cho độ tuổi và giới tính
          */
