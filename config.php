@@ -1,6 +1,7 @@
 <?php
 $host = 'localhost';
 $dbname = 'edms';
+//$dbname = 'edms_backup';
 $username = 'root';
 $password = 'admin';
 
