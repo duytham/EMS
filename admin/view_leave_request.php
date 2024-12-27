@@ -6,6 +6,8 @@ include '../config.php';
 $stmt = $conn->prepare("SELECT lr.*, u.FullName FROM LeaveRequest lr JOIN User u ON lr.UserId = u.Id");
 $stmt->execute();
 $leaveRequests = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+
 ?>
 <!DOCTYPE html>
 <?php include "../config.php"; ?>
@@ -79,6 +81,7 @@ $leaveRequests = $stmt->fetchAll(PDO::FETCH_ASSOC);
                             <table class="table table-bordered" id="dataTable" width="100%" cellspacing="0">
                                 <thead>
                                     <tr>
+                                        <th>ID</th>
                                         <th>Full Name</th>
                                         <th>Leave Start Date</th>
                                         <th>Leave End Date</th>
@@ -90,6 +93,7 @@ $leaveRequests = $stmt->fetchAll(PDO::FETCH_ASSOC);
                                 <tbody>
                                     <?php foreach ($leaveRequests as $request): ?>
                                         <tr>
+                                            <td><?= htmlspecialchars($request['Id']) ?></td>
                                             <td><?= $request['FullName'] ?></td>
                                             <td><?= $request['LeaveDateStart'] ?></td>
                                             <td><?= $request['LeaveDateEnd'] ?></td>
@@ -103,7 +107,7 @@ $leaveRequests = $stmt->fetchAll(PDO::FETCH_ASSOC);
                                                         <input type="hidden" name="leave_id" value="<?= htmlspecialchars($request['Id']) ?>">
                                                         <button type="submit" name="action" value="Accept" class="btn btn-success">Approve</button>
                                                     </form>
-                                                    <button class="btn btn-danger" onclick="confirmReject(<?= htmlspecialchars($request['Id']) ?>)">Reject</button>
+                                                    <button type="button" class="btn btn-danger" onclick="confirmReject(<?= htmlspecialchars($request['Id']) ?>)">Reject</button>
                                             </td>
                                         <?php endif; ?>
                                         </tr>
@@ -185,7 +189,32 @@ $leaveRequests = $stmt->fetchAll(PDO::FETCH_ASSOC);
         <script src="../js/demo/chart-area-demo.js"></script>
         <script src="../js/demo/chart-area-demo.js"></script>
         <script src="../js/demo/datatables-demo.js"></script>
+        <script>
+            function confirmReject(leaveId) {
+                if (confirm("Are you sure to reject this leave request?")) {
+                    // Tạo form và gửi yêu cầu POST
+                    const form = document.createElement('form');
+                    form.method = 'POST';
+                    form.action = 'approve_leave_request.php';
 
+                    const leaveIdInput = document.createElement('input');
+                    leaveIdInput.type = 'hidden';
+                    leaveIdInput.name = 'leave_id';
+                    leaveIdInput.value = leaveId;
+
+                    const actionInput = document.createElement('input');
+                    actionInput.type = 'hidden';
+                    actionInput.name = 'action';
+                    actionInput.value = 'Reject';
+
+                    form.appendChild(leaveIdInput);
+                    form.appendChild(actionInput);
+
+                    document.body.appendChild(form); // Thêm form vào DOM
+                    form.submit(); // Gửi form
+                }
+            }
+        </script>
     </div>
 </body>
 

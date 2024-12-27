@@ -51,7 +51,7 @@ try {
             //echo "ID: " . $employee["Id"] . " - Tên: " . htmlspecialchars($employee["FullName"]) . " - Email: " . htmlspecialchars($employee["Email"]) . "<br>";
         }
     } else {
-        echo "Không có nhân viên nào.";
+        echo " ";
     }
 } catch (PDOException $e) {
     echo "Lỗi: " . $e->getMessage();

@@ -70,7 +70,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['submit'])) {
                         <div class="card-body">
                             <form action="add_department.php" method="POST">
                                 <div class="form-group">
-                                    <label for="departmentname">Department name</label>
+                                    <label for="departmentname">Department name:*</label>
                                     <input type="text" class="form-control" id="departmentname" name="departmentname" required>
                                 </div>
                                 <div class="form-group">

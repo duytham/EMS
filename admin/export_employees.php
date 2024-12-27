@@ -5,7 +5,7 @@ require '../vendor/autoload.php';
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 
-$limit = 6; // Số dòng tối đa cho mỗi file
+$limit = 2; // Số dòng tối đa cho mỗi file
 $sql = "SELECT user.Id, user.FullName, user.Email, user.PhoneNumber, department.DepartmentName, user.Status 
         FROM user 
         LEFT JOIN department ON user.DepartmentID = department.Id

@@ -19,7 +19,7 @@ try {
 
     // Kiểm tra dữ liệu trả về
     if (empty($configs)) {
-        echo "Không có nhân viên nào thỏa mãn điều kiện";
+        echo "No employee configuration found.";
     }
 } catch (PDOException $e) {
     echo "Lỗi truy vấn: " . $e->getMessage();
@@ -38,7 +38,7 @@ $defaultCheckOut = "17:30";
 $lastCheckIn = $latestConfig['CheckInTime'] ?? $defaultCheckIn;
 $lastCheckOut = $latestConfig['CheckOutTime'] ?? $defaultCheckOut;
 
-// Cập nhật giờ check-in/check-out
+// Cập nhật giờ check-in/check-out  
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     if (isset($_POST['bulkCheckInTime']) && isset($_POST['bulkCheckOutTime'])) {
         // Cập nhật hàng loạt

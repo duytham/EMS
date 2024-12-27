@@ -14,42 +14,84 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     $departmentID = $_POST['departmentID']; // ID của phòng ban
     $password = isset($_POST['password']) ? $_POST['password'] : ''; // Mật khẩu
 
-    // Kiểm tra xem email đã tồn tại hay chưa
-    $emailCheck = $conn->prepare("SELECT * FROM `User` WHERE Email = :email");
-    $emailCheck->bindParam(':email', $email);
-    $emailCheck->execute();
-
-    if ($emailCheck->rowCount() > 0) {
-        $errorMessage = "Email already exists. Please use another email.";
+    // Kiểm tra số điện thoại chỉ chứa số và có độ dài 10 chữ số
+    if (!preg_match('/^[0-9]{10}$/', $phoneNumber)) {
+        $errorMessage = "Phone number must be 10 digits.";
     } else {
+        // Kiểm tra xem email đã tồn tại hay chưa
+        $emailCheck = $conn->prepare("SELECT * FROM `User` WHERE Email = :email");
+        $emailCheck->bindParam(':email', $email);
+        $emailCheck->execute();
 
-        // Mã hóa mật khẩu
-        $hashedPassword = password_hash($password, PASSWORD_DEFAULT);
+        if ($emailCheck->rowCount() > 0) {
+            $errorMessage = "Email already exists. Please use another email.";
+        } else {
+            // Mã hóa mật khẩu
+            $hashedPassword = password_hash($password, PASSWORD_DEFAULT);
 
-        // Câu lệnh SQL để thêm nhân viên
-        $sql = "INSERT INTO `User` (FullName, Email, PhoneNumber, DepartmentID, Password, RoleID) VALUES (:fullName, :email, :phoneNumber, :departmentID, :password, 2)"; // Vai trò mặc định là nhân viên (RoleID = 2)
+            // Câu lệnh SQL để thêm nhân viên
+            $sql = "INSERT INTO `User` (FullName, Email, PhoneNumber, DepartmentID, Password, RoleID) VALUES (:fullName, :email, :phoneNumber, :departmentID, :password, 2)"; // Vai trò mặc định là nhân viên (RoleID = 2)
 
-        try {
-            // Chuẩn bị câu truy vấn
-            $stmt = $conn->prepare($sql);
+            try {
+                // Bắt đầu transaction để đảm bảo tính toàn vẹn của dữ liệu
+                $conn->beginTransaction();
 
-            // Ràng buộc giá trị
-            $stmt->bindParam(':fullName', $fullName);
-            $stmt->bindParam(':email', $email);
-            $stmt->bindParam(':phoneNumber', $phoneNumber);
-            $stmt->bindParam(':departmentID', $departmentID);
-            $stmt->bindParam(':password', $hashedPassword); // Ràng buộc mật khẩu đã mã hóa
+                // Chuẩn bị câu truy vấn
+                $stmt = $conn->prepare($sql);
 
-            // Thực thi truy vấn
-            $stmt->execute();
+                // Ràng buộc giá trị
+                $stmt->bindParam(':fullName', $fullName);
+                $stmt->bindParam(':email', $email);
+                $stmt->bindParam(':phoneNumber', $phoneNumber);
+                $stmt->bindParam(':departmentID', $departmentID);
+                $stmt->bindParam(':password', $hashedPassword); // Ràng buộc mật khẩu đã mã hóa
 
-            // Thiết lập thông báo thành công
-            $successMessage = "Add employee successfully!";
-            // Chuyển hướng về trang quản lý nhân viên
-            header('Location: manage_employees.php?success=' . urlencode($successMessage));
-            exit();
-        } catch (PDOException $e) {
-            $errorMessage = "Lỗi: " . $e->getMessage();
+                // Thực thi truy vấn
+                $stmt->execute();
+
+                // Lấy ID của nhân viên vừa được thêm
+                $userId = $conn->lastInsertId();
+
+                // Thiết lập số ngày nghỉ phép tối đa là 12
+                $maxLeaveDays = 12;
+                $currentYear = date('Y');
+
+                // Thêm bản ghi vào bảng LeaveConfig để thiết lập ngày nghỉ phép cho nhân viên
+                $leaveConfigStmt = $conn->prepare("
+                    INSERT INTO `LeaveConfig` (UserId, MaxLeaveDays, UsedLeaveDays, LeaveYear) 
+                    VALUES (:userId, :maxLeaveDays, 0, :leaveYear)
+                ");
+                $leaveConfigStmt->bindParam(':userId', $userId);
+                $leaveConfigStmt->bindParam(':maxLeaveDays', $maxLeaveDays);
+                $leaveConfigStmt->bindParam(':leaveYear', $currentYear);
+
+                // Thêm bản ghi vào bảng emailConfig để thiết lập giờ check-in và check-out mặc định
+                $checkInTime = '08:00:00';
+                $checkOutTime = '17:00:00';
+                $emailConfigSql = "INSERT INTO emailConfig (UserId, CheckInTime, CheckOutTime, LastBulkConfig) 
+                                   VALUES (:userId, :checkInTime, :checkOutTime, NOW())";
+                $emailConfigStmt = $conn->prepare($emailConfigSql);
+                $emailConfigStmt->bindParam(':userId', $userId);
+                $emailConfigStmt->bindParam(':checkInTime', $checkInTime);
+                $emailConfigStmt->bindParam(':checkOutTime', $checkOutTime);
+                $emailConfigStmt->execute();
+
+                // Thực thi truy vấn để thêm thông tin nghỉ phép cho nhân viên
+                $leaveConfigStmt->execute();
+
+                // Commit transaction
+                $conn->commit();
+
+                // Thiết lập thông báo thành công
+                $successMessage = "Add employee successfully!";
+                // Chuyển hướng về trang quản lý nhân viên
+                header('Location: manage_employees.php?success=' . urlencode($successMessage));
+                exit();
+            } catch (PDOException $e) {
+                // Rollback nếu có lỗi
+                $conn->rollBack();
+                $errorMessage = "Error: " . $e->getMessage();
+            }
         }
     }
 }
@@ -111,6 +153,19 @@ $departments = $conn->query("
             margin-bottom: 20px;
         }
     </style>
+
+    <script>
+        function validateForm() {
+            const phoneNumber = document.getElementById('phoneNumber').value;
+            const phoneNumberPattern = /^[0-9]{10}$/;
+
+            if (!phoneNumberPattern.test(phoneNumber)) {
+                alert('Phone number must be 10 digits.');
+                return false;
+            }
+            return true;
+        }
+    </script>
 </head>
 
 <body id="page-top">
@@ -131,34 +186,34 @@ $departments = $conn->query("
                         <div class="row">
                             <div class="col-md-6">
                                 <div class="form-group">
-                                    <label for="fullName">Full name: </label>
+                                    <label for="fullName">Full name:* </label>
                                     <input type="text" class="form-control" id="fullName" name="fullName" required>
                                 </div>
                                 <div class="form-group">
-                                    <label for="email">Email:</label>
+                                    <label for="email">Email:*</label>
                                     <input type="email" class="form-control" id="email" name="email" required>
                                 </div>
                             </div>
                             <div class="col-md-6">
                                 <div class="form-group">
-                                    <label for="phoneNumber">Phone number:</label>
-                                    <input type="text" class="form-control" id="phoneNumber" name="phoneNumber" required>
+                                    <label for="phoneNumber">Phone number:*</label>
+                                    <input type="text" class="form-control"  id="phoneNumber" name="phoneNumber" required pattern="[0-9]{10}" title="Phone number must be 10 digits.">
                                 </div>
                                 <div class="form-group">
-                                    <label for="password">Password:</label>
+                                    <label for="password">Password:*</label>
                                     <input type="password" class="form-control" id="password" name="password" required>
                                 </div>
                             </div>
                         </div>
 
                         <div class="form-group">
-                            <label for="departmentID">Department:</label>
+                            <label for="departmentID">Department:*</label>
                             <select class="form-control" id="departmentID" name="departmentID" required>
-                                    <?php foreach ($departments as $department): ?>
-                                        <option value="<?= htmlspecialchars($department['id']) ?>">
-                                            <?= htmlspecialchars($department['display_name']) ?>
-                                        </option>
-                                    <?php endforeach; ?>
+                                <?php foreach ($departments as $department): ?>
+                                    <option value="<?= htmlspecialchars($department['id']) ?>">
+                                        <?= htmlspecialchars($department['display_name']) ?>
+                                    </option>
+                                <?php endforeach; ?>
                             </select>
                         </div>
                         <button type="submit" class="btn btn-primary">Add employee</button>

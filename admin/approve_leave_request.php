@@ -33,22 +33,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     // Cập nhật trạng thái đơn nghỉ phép
     if ($action === 'Accept') {
-        $stmt = $conn->prepare("UPDATE LeaveRequest SET Status = 'Approved', ApprovedBy = ?, ApprovedAt = NOW() WHERE Id = ?");
+        $updateStmt = $conn->prepare("UPDATE LeaveRequest SET Status = 'Approved', ApprovedBy = ?, ApprovedAt = NOW() WHERE Id = ?");
+        $updateStmt->execute([$adminId, $leaveId]);
         $statusMessage = "The leave request from $leaveDateStart to $leaveDateEnd is approved.";
     } elseif ($action === 'Reject') {
-        $stmt = $conn->prepare("UPDATE LeaveRequest SET Status = 'Rejected', ApprovedBy = ?, ApprovedAt = NOW() WHERE Id = ?");
+        $rejectStmt = $conn->prepare("UPDATE LeaveRequest SET Status = 'Rejected', ApprovedBy = ?, ApprovedAt = NOW() WHERE Id = ?");
+        $rejectStmt->execute([$adminId, $leaveId]);
+
+        // Khôi phục số ngày nghỉ phép
+        $leaveDays = (strtotime($leaveDateEnd) - strtotime($leaveDateStart)) / (60 * 60 * 24) + 1;
+        $restoreLeaveStmt = $conn->prepare("UPDATE LeaveConfig SET UsedLeaveDays = UsedLeaveDays - ? WHERE UserId = ? AND LeaveYear = YEAR(?)");
+        $restoreLeaveStmt->execute([$leaveDays, $leaveRequest['UserId'], $leaveDateStart]);
+
         $statusMessage = "The leave request from $leaveDateStart to $leaveDateEnd is rejected.";
     }
-    $stmt->execute([$adminId, $leaveId]);
-
-    // // Gửi email thông báo
-    // $subject = "Kết quả đơn nghỉ phép";
-    // $body = "
-    //     <p>Xin chào $employeeName,</p>
-    //     <p>$statusMessage</p>
-    //     <p>Lý do nghỉ phép: $reason</p>
-    //     <p>Trân trọng,<br>EMS Team</p>
-    // ";
 
     // Gửi email thông báo
     $subject = "Leave Request Status Update";
@@ -109,3 +107,4 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     header("Location: view_leave_request.php");
     exit;
 }
+?>
